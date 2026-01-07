@@ -2,7 +2,7 @@
 
 A rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that shows context usage, rate limits, and cost tracking.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.1-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
