@@ -8,9 +8,9 @@ A rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-c
 
 ## Features
 
-### Subscription Mode (Max Plan)
+### Subscription Mode
 ```
-Opus 4.5 │ Ctx: ██░░░░░░ 25% (50K/200K) │ 5h: ██░░░░░░ 36% →1h17m @14:00 │ 🔥 1.7K t/m │ 7d: ░░░░░░░░ 4% →6d @14.01 │ 30m
+Opus 4.5 │ Ctx: ██░░░░░░ 25% (50K/200K) │ 5h: ██░░░░░░ 36% →1h15m @14:00 │ 🔥 1.7K t/m │ 7d: ░░░░░░░░ 4% →6d @14.01 │ 30m
 ```
 
 - **Context Window**: Progress bar + percentage + tokens used/max
