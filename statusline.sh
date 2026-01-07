@@ -242,23 +242,19 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
     RESET_INFO=""
     RESET_TIME_LOCAL=""
     RESET_EPOCH=0
+    RESET_EPOCH_ROUNDED=0
     if [ -n "$FIVE_HOUR_RESET" ] && [ "$FIVE_HOUR_RESET" != "null" ] && [ "$FIVE_HOUR_RESET" != "" ]; then
         RESET_EPOCH=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${FIVE_HOUR_RESET%%.*}" +%s 2>/dev/null || echo 0)
         NOW_EPOCH=$(date +%s)
         if [ "$RESET_EPOCH" -gt "$NOW_EPOCH" ]; then
-            REMAINING_SECS=$((RESET_EPOCH - NOW_EPOCH))
+            # Auf 5 Min runden (für konsistente Anzeige)
+            RESET_EPOCH_ROUNDED=$(( ((RESET_EPOCH + 150) / 300) * 300 ))
+            RESET_TIME_LOCAL=$(date -j -f "%s" "$RESET_EPOCH_ROUNDED" "+%H:%M" 2>/dev/null)
+            # Verbleibende Zeit basierend auf gerundeter Reset-Zeit
+            REMAINING_SECS=$((RESET_EPOCH_ROUNDED - NOW_EPOCH))
+            [ "$REMAINING_SECS" -lt 0 ] && REMAINING_SECS=0
             RESET_H=$((REMAINING_SECS / 3600))
             RESET_M=$(((REMAINING_SECS % 3600) / 60))
-            # Lokale Reset-Zeit im 24h Format (auf 5 Min gerundet)
-            RESET_MIN=$(date -j -f "%s" "$RESET_EPOCH" "+%M" 2>/dev/null)
-            RESET_MIN_ROUNDED=$(( ((RESET_MIN + 2) / 5) * 5 ))
-            if [ "$RESET_MIN_ROUNDED" -eq 60 ]; then
-                # Überlauf: nächste Stunde
-                RESET_TIME_LOCAL=$(date -j -f "%s" "$((RESET_EPOCH + 300))" "+%H:00" 2>/dev/null)
-            else
-                RESET_HOUR=$(date -j -f "%s" "$RESET_EPOCH" "+%H" 2>/dev/null)
-                RESET_TIME_LOCAL=$(printf "%s:%02d" "$RESET_HOUR" "$RESET_MIN_ROUNDED")
-            fi
             if [ "$RESET_H" -gt 0 ]; then
                 RESET_INFO="${RESET_H}h${RESET_M}m"
             else
