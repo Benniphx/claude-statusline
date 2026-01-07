@@ -9,9 +9,7 @@ A rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-c
 ## Features
 
 ### Subscription Mode
-```
-Opus 4.5 │ Ctx: ██░░░░░░ 25% (50K/200K) │ 5h: ██░░░░░░ 36% →1h15m @14:00 │ 🔥 1.7K t/m │ 7d: ░░░░░░░░ 4% →6d @14.01 │ 30m
-```
+![Subscription Mode](./screenshots/subscription.png)
 
 - **Context Window**: Progress bar + percentage + tokens used/max
 - **5h Rate Limit**: Usage + time until reset + local reset time (rounded to 5min)
@@ -19,9 +17,7 @@ Opus 4.5 │ Ctx: ██░░░░░░ 25% (50K/200K) │ 5h: ██░░�
 - **7d Rate Limit**: Usage + days until reset + reset date
 
 ### API-Key Mode
-```
-Sonnet 4 │ Ctx: █████░░░ 62% (124K/200K) │ 💰 $1.25 │ 📅 $3.80 │ 🔥 2.1K t/m $2.50/h │ 30m
-```
+![API-Key Mode](./screenshots/api-key.png)
 
 - **Context Window**: Same as above
 - **Session Cost**: Current session spending
