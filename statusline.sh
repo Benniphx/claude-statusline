@@ -1,6 +1,40 @@
 #!/bin/bash
+# Claude Code Statusline v2.0.0
+# https://github.com/Benniphx/claude-statusline
+VERSION="2.0.0"
+
 export LC_NUMERIC=C
 input=$(cat)
+
+# === Update Check (einmal täglich) ===
+UPDATE_CACHE="/tmp/claude_statusline_update.txt"
+UPDATE_NOTICE=""
+check_update() {
+    local LATEST
+    LATEST=$(curl -s --max-time 2 "https://api.github.com/repos/Benniphx/claude-statusline/releases/latest" 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)
+    if [ -n "$LATEST" ]; then
+        LATEST="${LATEST#v}"  # Remove 'v' prefix
+        echo "$LATEST" > "$UPDATE_CACHE"
+        if [ "$LATEST" != "$VERSION" ]; then
+            echo "1"  # Update available
+        else
+            echo "0"  # Up to date
+        fi
+    fi
+}
+
+# Prüfe Cache (24h TTL)
+if [ -f "$UPDATE_CACHE" ]; then
+    CACHE_AGE=$(( $(date +%s) - $(stat -f %m "$UPDATE_CACHE" 2>/dev/null || echo 0) ))
+    if [ "$CACHE_AGE" -gt 86400 ]; then
+        UPDATE_AVAILABLE=$(check_update)
+    else
+        CACHED_VERSION=$(cat "$UPDATE_CACHE" 2>/dev/null)
+        [ "$CACHED_VERSION" != "$VERSION" ] && UPDATE_AVAILABLE="1"
+    fi
+else
+    (check_update > /dev/null 2>&1) &  # Background check on first run
+fi
 
 # === Account-Typ Erkennung ===
 # Prüfe ob OAuth (Subscription) oder API-Key
@@ -50,6 +84,10 @@ BLUE="\033[34m"
 MAGENTA="\033[35m"
 DIM="\033[2m"
 RESET="\033[0m"
+
+# Update Notice (nach Farben definiert)
+UPDATE_NOTICE=""
+[ "$UPDATE_AVAILABLE" = "1" ] && UPDATE_NOTICE=" ${YELLOW}[Update]${RESET}"
 
 # === Balken-Funktion ===
 # Erzeugt einen farbigen Fortschrittsbalken [████░░░░░░]
@@ -385,7 +423,7 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
     fi
 
     # OUTPUT: Subscription mit Progress Bars (Burn+ETA vor 7d)
-    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}"
+    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
 
 else
     # ==========================================
@@ -470,5 +508,5 @@ else
     fi
 
     # OUTPUT: API-Key mit Context Bar
-    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  💰 ${COST_COLOR}\$${SESSION_FMT}${RESET}  ${DIM}│${RESET}  📅 ${DAILY_COLOR}\$${DAILY_FMT}${RESET}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}"
+    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  💰 ${COST_COLOR}\$${SESSION_FMT}${RESET}  ${DIM}│${RESET}  📅 ${DAILY_COLOR}\$${DAILY_FMT}${RESET}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
 fi
