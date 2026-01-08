@@ -1,0 +1,51 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y jq
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install jq
+          fi
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/statusline.sh
+          chmod +x tests/test_statusline.sh
+
+      - name: Run tests
+        run: ./tests/test_statusline.sh
+
+  shellcheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck on statusline.sh
+        run: shellcheck scripts/statusline.sh || true
+
+      - name: Run ShellCheck on install.sh
+        run: shellcheck scripts/install.sh || true

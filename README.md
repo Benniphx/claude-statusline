@@ -2,9 +2,10 @@
 
 A rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that shows context usage, rate limits, and cost tracking.
 
-![Version](https://img.shields.io/badge/version-1.0.1-blue)
-![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
 
 ## Features
 
@@ -36,25 +37,42 @@ Warnings only appear when there's a problem:
 
 ## Requirements
 
-- macOS (uses `security` command for keychain access)
+- **macOS** or **Linux/WSL**
 - `jq` for JSON parsing
 - `curl` for API calls
 
 ```bash
+# macOS
 brew install jq
+
+# Linux/WSL
+sudo apt install jq
 ```
 
 ## Installation
 
-### Quick Install
+### Plugin Install (Recommended)
+
+Install as a Claude Code plugin for automatic updates:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Benniphx/claude-statusline/main/install.sh | bash
+# Add the marketplace
+claude plugin marketplace add Benniphx/claude-statusline
+
+# Install the plugin
+claude plugin install statusline
 ```
 
+The plugin automatically:
+- Installs `statusline.sh` to `~/.claude/`
+- Configures `settings.json`
+- Updates on plugin update
+
 ### Manual Install
+
 ```bash
 # Download the script
-curl -o ~/.claude/statusline.sh https://raw.githubusercontent.com/Benniphx/claude-statusline/main/statusline.sh
+curl -o ~/.claude/statusline.sh https://raw.githubusercontent.com/Benniphx/claude-statusline/main/scripts/statusline.sh
 chmod +x ~/.claude/statusline.sh
 
 # Add to Claude Code settings (~/.claude/settings.json)
@@ -66,6 +84,12 @@ chmod +x ~/.claude/statusline.sh
 }
 ```
 
+## Plugin Commands
+
+When installed as a plugin:
+
+- `/statusline:config` - Check configuration and troubleshoot issues
+
 ## Configuration
 
 The script auto-detects your account type:
@@ -74,28 +98,75 @@ The script auto-detects your account type:
 
 No configuration needed - just install and restart Claude Code.
 
+### Credential Storage
+
+| Platform | Location |
+|----------|----------|
+| macOS | Keychain (`Claude Code-credentials`) |
+| Linux/WSL | `~/.claude/.credentials.json` or `~/.claude/credentials.json` |
+| All | `CLAUDE_CODE_OAUTH_TOKEN` environment variable (highest priority) |
+
 ## Cache Files
 
 The script uses temporary cache files to minimize API calls:
 - `/tmp/claude_rate_limit_cache.json` - Rate limit data (60s TTL)
 - `/tmp/claude_display_cache.json` - Fallback display values
 - `/tmp/claude_daily_cost_YYYY-MM-DD.txt` - Daily cost tracking
+- `/tmp/claude_statusline_update.txt` - Update check cache (24h TTL)
 
 Cache is automatically invalidated when rate limit resets.
 
 ## Troubleshooting
 
 ### No rate limit data showing
+
+**macOS:**
 ```bash
 # Check if OAuth credentials exist
 security find-generic-password -s "Claude Code-credentials" -w | jq '.claudeAiOauth'
+```
 
-# Clear cache and retry
+**Linux/WSL:**
+```bash
+# Check if credentials file exists
+cat ~/.claude/.credentials.json | jq '.claudeAiOauth'
+```
+
+**Clear cache and retry:**
+```bash
 rm -f /tmp/claude_rate_limit_cache.json /tmp/claude_display_cache.json
 ```
 
 ### Wrong timezone
 The script converts UTC timestamps from the API to your local timezone automatically.
+
+## Development
+
+### Running Tests
+
+```bash
+./tests/test_statusline.sh
+```
+
+### Project Structure
+
+```
+claude-statusline/
+├── .claude-plugin/
+│   └── plugin.json       # Plugin manifest
+├── commands/
+│   └── config.md         # /statusline:config command
+├── hooks/
+│   └── hooks.json        # SessionStart hook
+├── scripts/
+│   ├── statusline.sh     # Main status line script
+│   └── install.sh        # Auto-installer
+├── tests/
+│   └── test_statusline.sh
+└── .github/
+    └── workflows/
+        └── test.yml      # CI pipeline
+```
 
 ## License
 

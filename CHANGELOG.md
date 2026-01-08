@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-01-08
+
+### Added
+- **Plugin Support**: Install as Claude Code plugin for automatic updates
+- **Cross-Platform**: Works on macOS and Linux/WSL
+- **CI Pipeline**: GitHub Actions for automated testing on macOS and Linux
+- **Test Suite**: Comprehensive tests for all major functionality
+- `/statusline:config` command for troubleshooting
+
+### Changed
+- Restructured project as Claude Code plugin
+- Moved scripts to `scripts/` directory
+- Cross-platform credential access (Keychain on macOS, credentials file on Linux)
+- Cross-platform `stat` and `date` commands
+
+### Technical
+- `get_credentials()` - unified credential access
+- `get_file_mtime()` - cross-platform file modification time
+- `parse_iso_date()` - cross-platform ISO date parsing
+- `format_time()` - cross-platform time formatting
+- `sed_inplace()` - cross-platform sed in-place edit
+
 ## [1.0.1] - 2026-01-07
 
 ### Fixed

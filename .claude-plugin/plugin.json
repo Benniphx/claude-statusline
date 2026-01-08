@@ -1,0 +1,12 @@
+{
+  "name": "statusline",
+  "description": "Rich status line showing context window, rate limits, burn rate, and costs",
+  "version": "2.0.0",
+  "author": {
+    "name": "Benniphx",
+    "url": "https://github.com/Benniphx"
+  },
+  "repository": "https://github.com/Benniphx/claude-statusline",
+  "license": "MIT",
+  "keywords": ["statusline", "rate-limits", "context", "costs"]
+}
