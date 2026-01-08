@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v2.0.3
+# Claude Code Statusline v2.0.4
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="2.0.3"
+VERSION="2.0.4"
 
 export LC_NUMERIC=C
 input=$(cat)
@@ -142,8 +142,6 @@ if [ -n "$HAS_OAUTH" ] && [ "$HAS_OAUTH" != "null" ]; then
 fi
 
 # === Extract Data ===
-INPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
-OUTPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 MODEL=$(echo "$input" | jq -r '.model.display_name // "Claude"')
 COST=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
@@ -151,9 +149,24 @@ DURATION_MS=$(echo "$input" | jq -r '.cost.total_duration_ms // 0')
 LINES_ADDED=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
 LINES_REMOVED=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
 
+# Context tokens: use current_usage (actual context) not cumulative totals
+# current_usage contains the actual tokens in the context window
+CURRENT_INPUT=$(echo "$input" | jq -r '.context_window.current_usage.input_tokens // empty' 2>/dev/null)
+CACHE_CREATE=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0' 2>/dev/null)
+CACHE_READ=$(echo "$input" | jq -r '.context_window.current_usage.cache_read_input_tokens // 0' 2>/dev/null)
+
+if [ -n "$CURRENT_INPUT" ] && [ "$CURRENT_INPUT" != "null" ]; then
+    # Use current_usage for accurate context window display
+    TOTAL_TOKENS=$((CURRENT_INPUT + CACHE_CREATE + CACHE_READ))
+else
+    # Fallback to cumulative (old behavior) if current_usage not available
+    INPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
+    OUTPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
+    TOTAL_TOKENS=$((INPUT_TOKENS + OUTPUT_TOKENS))
+fi
+
 # === Calculations ===
-TOTAL_TOKENS=$((INPUT_TOKENS + OUTPUT_TOKENS))
-# Cap tokens at context size for display (API sometimes reports more)
+# Cap tokens at context size for display
 if [ "$TOTAL_TOKENS" -gt "$CONTEXT_SIZE" ]; then
     DISPLAY_TOKENS="$CONTEXT_SIZE"
 else

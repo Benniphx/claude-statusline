@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.4] - 2026-01-08
+
+### Fixed
+- Context window now shows **actual usage** instead of cumulative tokens
+- Previously showed 200K/200K after long sessions even when context was only ~40% full
+- Now uses `current_usage.input_tokens` from Claude Code API for accurate display
+
 ## [2.0.3] - 2026-01-08
 
 ### Fixed
