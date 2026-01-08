@@ -1,0 +1,15 @@
+{
+  "name": "claude-statusline",
+  "owner": {
+    "name": "Benniphx",
+    "url": "https://github.com/Benniphx"
+  },
+  "plugins": [
+    {
+      "name": "statusline",
+      "source": ".",
+      "description": "Rich status line showing context window, rate limits, burn rate, and costs",
+      "version": "2.0.0"
+    }
+  ]
+}
