@@ -77,10 +77,10 @@ fi
 # Test 2: Script has correct version
 echo "Test: Version is set correctly"
 VERSION=$(grep -o 'VERSION="[^"]*"' "$STATUSLINE" | cut -d'"' -f2)
-if [ "$VERSION" = "2.0.1" ]; then
-    pass "Version is 2.0.1"
+if [ "$VERSION" = "2.0.2" ]; then
+    pass "Version is 2.0.2"
 else
-    fail "Version should be 2.0.1" "2.0.1" "$VERSION"
+    fail "Version should be 2.0.2" "2.0.2" "$VERSION"
 fi
 
 # Test 3: Cross-platform helpers exist

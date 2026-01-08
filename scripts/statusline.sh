@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v2.0.1
+# Claude Code Statusline v2.0.2
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="2.0.1"
+VERSION="2.0.2"
 
 export LC_NUMERIC=C
 input=$(cat)

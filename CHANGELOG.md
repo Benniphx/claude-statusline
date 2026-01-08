@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2] - 2026-01-08
+
+### Fixed
+- SessionStart hook now includes matcher for reliable execution
+- Added timeout to hook command
+
 ## [2.0.1] - 2026-01-08
 
 ### Added
