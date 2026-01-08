@@ -2,7 +2,7 @@
 
 A rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that shows context usage, rate limits, and cost tracking.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.1-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -67,6 +67,17 @@ The plugin automatically:
 - Installs `statusline.sh` to `~/.claude/`
 - Configures `settings.json`
 - Updates on plugin update
+
+### Upgrading from v1.x
+
+If you had a previous version installed and see `[Update]` after installing the plugin:
+
+```bash
+curl -o ~/.claude/statusline.sh https://raw.githubusercontent.com/Benniphx/claude-statusline/main/scripts/statusline.sh
+chmod +x ~/.claude/statusline.sh
+```
+
+Then restart Claude Code.
 
 ### Manual Install
 
