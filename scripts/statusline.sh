@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v2.0.2
+# Claude Code Statusline v2.0.3
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="2.0.2"
+VERSION="2.0.3"
 
 export LC_NUMERIC=C
 input=$(cat)
@@ -82,29 +82,53 @@ sed_inplace() {
 # === Update Check (once daily) ===
 UPDATE_CACHE="/tmp/claude_statusline_update.txt"
 UPDATE_NOTICE=""
+
+# Version comparison helper: returns 0 if v1 > v2, 1 otherwise
+version_gt() {
+    local v1="$1" v2="$2"
+    # Simple comparison: if they're equal, return 1 (not greater)
+    [ "$v1" = "$v2" ] && return 1
+    # Sort versions and check if v1 comes second (meaning it's greater)
+    local highest
+    highest=$(printf '%s\n%s\n' "$v1" "$v2" | sort -V | tail -n1)
+    [ "$highest" = "$v1" ]
+}
+
 check_update() {
     local LATEST
     LATEST=$(curl -s --max-time 2 "https://api.github.com/repos/Benniphx/claude-statusline/releases/latest" 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)
     if [ -n "$LATEST" ]; then
         LATEST="${LATEST#v}"  # Remove 'v' prefix
         echo "$LATEST" > "$UPDATE_CACHE"
-        if [ "$LATEST" != "$VERSION" ]; then
+        # Only show update if remote version is NEWER than local
+        if version_gt "$LATEST" "$VERSION"; then
             echo "1"  # Update available
         else
-            echo "0"  # Up to date
+            echo "0"  # Up to date (or local is newer/equal)
         fi
     fi
 }
 
 # Check cache (24h TTL)
+UPDATE_AVAILABLE=""
 if [ -f "$UPDATE_CACHE" ]; then
     CACHE_AGE=$(( $(date +%s) - $(get_file_mtime "$UPDATE_CACHE") ))
+    CACHED_VERSION=$(cat "$UPDATE_CACHE" 2>/dev/null)
+
     if [ "$CACHE_AGE" -gt 86400 ]; then
+        # Cache expired, refresh
         UPDATE_AVAILABLE=$(check_update)
-    else
-        CACHED_VERSION=$(cat "$UPDATE_CACHE" 2>/dev/null)
-        [ "$CACHED_VERSION" != "$VERSION" ] && UPDATE_AVAILABLE="1"
+    elif [ "$CACHED_VERSION" != "$VERSION" ]; then
+        # Cache version differs - check if cached is actually newer
+        if version_gt "$CACHED_VERSION" "$VERSION"; then
+            # Cached version is newer = update available
+            UPDATE_AVAILABLE="1"
+        else
+            # User upgraded or versions are same prefix - refresh to be sure
+            UPDATE_AVAILABLE=$(check_update)
+        fi
     fi
+    # If CACHED_VERSION == VERSION, no update needed (don't set UPDATE_AVAILABLE)
 else
     (check_update > /dev/null 2>&1) &  # Background check on first run
 fi

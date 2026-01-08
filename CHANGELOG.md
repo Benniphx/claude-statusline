@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.3] - 2026-01-08
+
+### Fixed
+- False `[Update]` notification after upgrading: now uses proper version comparison
+- Added `version_gt()` helper for semantic version comparison
+- Update check now correctly handles: user upgrades, equal versions, and actual new releases
+
+### Added
+- Tests for update notification logic (version comparison, no false positives)
+
 ## [2.0.2] - 2026-01-08
 
 ### Fixed

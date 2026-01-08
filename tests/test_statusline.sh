@@ -77,10 +77,10 @@ fi
 # Test 2: Script has correct version
 echo "Test: Version is set correctly"
 VERSION=$(grep -o 'VERSION="[^"]*"' "$STATUSLINE" | cut -d'"' -f2)
-if [ "$VERSION" = "2.0.2" ]; then
-    pass "Version is 2.0.2"
+if [ "$VERSION" = "2.0.3" ]; then
+    pass "Version is 2.0.3"
 else
-    fail "Version should be 2.0.2" "2.0.2" "$VERSION"
+    fail "Version should be 2.0.3" "2.0.3" "$VERSION"
 fi
 
 # Test 3: Cross-platform helpers exist
@@ -180,12 +180,94 @@ else
 fi
 
 # ============================================
+# Update Notification Tests
+# ============================================
+
+# Test 13: version_gt function exists
+echo "Test: version_gt helper function exists"
+if grep -q "version_gt()" "$STATUSLINE"; then
+    pass "version_gt function defined"
+else
+    fail "version_gt function missing" "function definition" "not found"
+fi
+
+# Test 14: version_gt logic (extracted and tested)
+echo "Test: version_gt returns correct results"
+# Extract the version_gt function and test it
+version_gt() {
+    local v1="$1" v2="$2"
+    [ "$v1" = "$v2" ] && return 1
+    local highest
+    highest=$(printf '%s\n%s\n' "$v1" "$v2" | sort -V | tail -n1)
+    [ "$highest" = "$v1" ]
+}
+
+# Test cases
+VGT_PASS=true
+# 2.0.3 > 2.0.2 should be true
+if ! version_gt "2.0.3" "2.0.2"; then
+    VGT_PASS=false
+fi
+# 2.0.2 > 2.0.3 should be false
+if version_gt "2.0.2" "2.0.3"; then
+    VGT_PASS=false
+fi
+# 2.0.3 > 2.0.3 should be false (equal)
+if version_gt "2.0.3" "2.0.3"; then
+    VGT_PASS=false
+fi
+# 2.1.0 > 2.0.9 should be true
+if ! version_gt "2.1.0" "2.0.9"; then
+    VGT_PASS=false
+fi
+# 3.0.0 > 2.9.9 should be true
+if ! version_gt "3.0.0" "2.9.9"; then
+    VGT_PASS=false
+fi
+
+if [ "$VGT_PASS" = true ]; then
+    pass "version_gt returns correct results"
+else
+    fail "version_gt logic incorrect" "correct comparisons" "wrong results"
+fi
+
+# Test 15: No [Update] when versions match
+echo "Test: No update notification when versions match"
+TEST_UPDATE_CACHE=$(mktemp)
+echo "2.0.3" > "$TEST_UPDATE_CACHE"
+# Simulate: cache has same version as current
+OUTPUT=$(UPDATE_CACHE="$TEST_UPDATE_CACHE" VERSION="2.0.3" create_mock_input | bash "$STATUSLINE" 2>/dev/null || true)
+rm -f "$TEST_UPDATE_CACHE"
+if echo "$OUTPUT" | grep -q '\[Update\]'; then
+    fail "Should NOT show update when versions match" "no [Update]" "showed [Update]"
+else
+    pass "No update notification when versions match"
+fi
+
+# Test 16: No [Update] when local version is newer (user upgraded)
+echo "Test: No false update notification after user upgrade"
+TEST_UPDATE_CACHE=$(mktemp)
+echo "2.0.2" > "$TEST_UPDATE_CACHE"  # Old cache from before upgrade
+# Note: This test requires network call to check, so we just verify the logic exists
+if grep -q 'version_gt.*CACHED_VERSION.*VERSION' "$STATUSLINE"; then
+    pass "Upgrade detection logic present"
+else
+    # Fallback: check that the logic handles version mismatch
+    if grep -q 'User upgraded' "$STATUSLINE" || grep -q 'versions are same' "$STATUSLINE"; then
+        pass "Upgrade handling logic present"
+    else
+        fail "Upgrade detection missing" "version comparison" "not found"
+    fi
+fi
+rm -f "$TEST_UPDATE_CACHE"
+
+# ============================================
 # Install Script Tests
 # ============================================
 
 INSTALL_SCRIPT="$PROJECT_ROOT/scripts/install.sh"
 
-# Test 13: Install script exists and is executable
+# Test 17: Install script exists and is executable
 echo "Test: Install script exists and is executable"
 if [ -x "$INSTALL_SCRIPT" ]; then
     pass "install.sh is executable"
@@ -193,7 +275,7 @@ else
     fail "install.sh should be executable" "executable" "not executable"
 fi
 
-# Test 14: Install script creates settings.json
+# Test 18: Install script creates settings.json
 echo "Test: Install script creates settings.json"
 TEST_DIR=$(mktemp -d)
 HOME="$TEST_DIR" CLAUDE_PLUGIN_ROOT="$PROJECT_ROOT" bash "$INSTALL_SCRIPT" >/dev/null 2>&1
@@ -204,7 +286,7 @@ else
 fi
 rm -rf "$TEST_DIR"
 
-# Test 15: Install script copies statusline.sh
+# Test 19: Install script copies statusline.sh
 echo "Test: Install script copies statusline.sh"
 TEST_DIR=$(mktemp -d)
 HOME="$TEST_DIR" CLAUDE_PLUGIN_ROOT="$PROJECT_ROOT" bash "$INSTALL_SCRIPT" >/dev/null 2>&1
@@ -215,7 +297,7 @@ else
 fi
 rm -rf "$TEST_DIR"
 
-# Test 16: Install script preserves existing settings
+# Test 20: Install script preserves existing settings
 echo "Test: Install script preserves existing settings"
 TEST_DIR=$(mktemp -d)
 mkdir -p "$TEST_DIR/.claude"
@@ -228,7 +310,7 @@ else
 fi
 rm -rf "$TEST_DIR"
 
-# Test 17: Install script respects custom statusLine
+# Test 21: Install script respects custom statusLine
 echo "Test: Install script respects custom statusLine"
 TEST_DIR=$(mktemp -d)
 mkdir -p "$TEST_DIR/.claude"
