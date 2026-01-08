@@ -74,13 +74,16 @@ else
     fail "statusline.sh should be executable" "executable" "not executable"
 fi
 
-# Test 2: Script has correct version
-echo "Test: Version is set correctly"
-VERSION=$(grep -o 'VERSION="[^"]*"' "$STATUSLINE" | cut -d'"' -f2)
-if [ "$VERSION" = "2.0.3" ]; then
-    pass "Version is 2.0.3"
+# Test 2: All version numbers match across files
+echo "Test: Version consistency across all files"
+V_SCRIPT=$(grep -o 'VERSION="[^"]*"' "$STATUSLINE" | cut -d'"' -f2)
+V_PLUGIN=$(jq -r '.version' "$PROJECT_ROOT/.claude-plugin/plugin.json")
+V_MARKET=$(jq -r '.plugins[0].version' "$PROJECT_ROOT/.claude-plugin/marketplace.json")
+
+if [ "$V_SCRIPT" = "$V_PLUGIN" ] && [ "$V_PLUGIN" = "$V_MARKET" ]; then
+    pass "All versions match: $V_SCRIPT"
 else
-    fail "Version should be 2.0.3" "2.0.3" "$VERSION"
+    fail "Version mismatch!" "all same" "script=$V_SCRIPT, plugin.json=$V_PLUGIN, marketplace.json=$V_MARKET"
 fi
 
 # Test 3: Cross-platform helpers exist
