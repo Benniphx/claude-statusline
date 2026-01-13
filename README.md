@@ -1,6 +1,6 @@
 # Claude Code Statusline
 
-![Version](https://img.shields.io/badge/version-2.0.5-blue)
+![Version](https://img.shields.io/badge/version-2.0.6-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -88,6 +88,7 @@ Add to `~/.claude/settings.json`:
 - `claude_rate_limit_cache.json` (60s TTL)
 - `claude_display_cache.json`
 - `claude_daily_cost_YYYY-MM-DD.txt`
+- `claude_session_total_*.txt` (for `--resume` support)
 
 **Credentials:**
 | Platform | Location |

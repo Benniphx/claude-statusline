@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v2.0.5
+# Claude Code Statusline v2.0.6
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="2.0.5"
+VERSION="2.0.6"
 
 export LC_NUMERIC=C
 input=$(cat)
@@ -541,27 +541,51 @@ else
 
     TODAY=$(date +%Y-%m-%d)
     COST_TRACKER="$CACHE_DIR/claude_daily_cost_${TODAY}.txt"
+    CURRENT_SESSION_ID="${CLAUDE_SESSION_ID:-$PPID}"
+    SESSION_TOTAL_FILE="$CACHE_DIR/claude_session_total_${CURRENT_SESSION_ID}.txt"
 
-    # Clean old trackers
+    # Clean old daily trackers (keep today only)
     find "$CACHE_DIR" -name "claude_daily_cost_*.txt" ! -name "claude_daily_cost_${TODAY}.txt" -delete 2>/dev/null
 
+    # Get last known total for this session (for --resume support)
+    LAST_KNOWN_TOTAL=0
+    if [ -f "$SESSION_TOTAL_FILE" ]; then
+        LAST_KNOWN_TOTAL=$(cat "$SESSION_TOTAL_FILE" 2>/dev/null)
+        LAST_KNOWN_TOTAL=${LAST_KNOWN_TOTAL:-0}
+    fi
+
+    # Calculate delta (new spending since last update)
+    COST_DELTA=$(awk "BEGIN {printf \"%.6f\", $COST - $LAST_KNOWN_TOTAL}" 2>/dev/null)
+    # Ensure delta is not negative (can happen on session restart)
+    if awk "BEGIN {exit ($COST_DELTA < 0) ? 0 : 1}" 2>/dev/null; then
+        COST_DELTA="$COST"
+        LAST_KNOWN_TOTAL=0
+    fi
+
+    # Save current total for next comparison
+    echo "$COST" > "$SESSION_TOTAL_FILE"
+
+    # Session cost display = total session cost (unchanged)
     SESSION_COST="$COST"
 
-    # Load or init daily costs
+    # Update daily tracker with delta-based accounting
     if [ -f "$COST_TRACKER" ]; then
-        CURRENT_SESSION_ID="${CLAUDE_SESSION_ID:-$PPID}"
-
         if grep -q "^${CURRENT_SESSION_ID}:" "$COST_TRACKER" 2>/dev/null; then
-            sed_inplace "s/^${CURRENT_SESSION_ID}:.*/${CURRENT_SESSION_ID}:${SESSION_COST}/" "$COST_TRACKER" 2>/dev/null
+            # Get current daily amount for this session and add delta
+            CURRENT_DAILY=$(grep "^${CURRENT_SESSION_ID}:" "$COST_TRACKER" | cut -d: -f2)
+            CURRENT_DAILY=${CURRENT_DAILY:-0}
+            NEW_DAILY=$(awk "BEGIN {printf \"%.6f\", $CURRENT_DAILY + $COST_DELTA}" 2>/dev/null)
+            sed_inplace "s/^${CURRENT_SESSION_ID}:.*/${CURRENT_SESSION_ID}:${NEW_DAILY}/" "$COST_TRACKER" 2>/dev/null
         else
-            echo "${CURRENT_SESSION_ID}:${SESSION_COST}" >> "$COST_TRACKER"
+            # New session for today - start with delta
+            echo "${CURRENT_SESSION_ID}:${COST_DELTA}" >> "$COST_TRACKER"
         fi
 
         DAILY_COST=$(awk -F: '{sum += $2} END {printf "%.4f", sum}' "$COST_TRACKER" 2>/dev/null)
     else
-        CURRENT_SESSION_ID="${CLAUDE_SESSION_ID:-$PPID}"
-        echo "${CURRENT_SESSION_ID}:${SESSION_COST}" > "$COST_TRACKER"
-        DAILY_COST="$SESSION_COST"
+        # First entry today - use delta as starting point
+        echo "${CURRENT_SESSION_ID}:${COST_DELTA}" > "$COST_TRACKER"
+        DAILY_COST="$COST_DELTA"
     fi
 
     # Cost colors (session)

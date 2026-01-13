@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.6] - 2026-01-13
+
+### Fixed
+- **Daily cost tracking with `--resume`**: Sessions resumed across multiple days no longer show inflated daily costs
+- Previously, `--resume` sessions would display the entire accumulated session cost as "today's" cost
+- Now tracks cost deltas per session, so daily cost only reflects spending since midnight
+- Example: A 3-day resumed session with $30 total now correctly shows ~$10/day instead of $30 on day 3
+
+### Technical
+- Added `SESSION_TOTAL_FILE` to track last known total cost per session
+- Daily tracker now stores delta-based costs instead of total session costs
+- Handles negative deltas gracefully (session restart detection)
+
 ## [2.0.5] - 2026-01-13
 
 ### Added
