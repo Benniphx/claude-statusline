@@ -1,92 +1,79 @@
 # Claude Code Statusline
 
-A rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that shows context usage, rate limits, and cost tracking.
-
 ![Version](https://img.shields.io/badge/version-2.0.5-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
 
-## Features
+Rich status line for [Claude Code](https://code.claude.com) showing context, rate limits, and costs.
 
-### Subscription Mode
+**Features:**
+- Context window usage with progress bar
+- 5h/7d rate limits with reset times (subscription)
+- Session + daily cost tracking (API-key)
+- Burn rate warnings when approaching limits
+- Auto-update notifications
+- Cross-platform (macOS + Linux/WSL)
+
 ![Subscription Mode](./screenshots/subscription.png)
-
-- **Context Window**: Progress bar + percentage + tokens used/max
-- **5h Rate Limit**: Usage + time until reset + local reset time (rounded to 5min)
-- **Burn Rate**: Tokens/min with warning if limit will be hit before reset
-- **7d Rate Limit**: Usage + days until reset + reset date
-
-### API-Key Mode
-![API-Key Mode](./screenshots/api-key.png)
-
-- **Context Window**: Same as above
-- **Session Cost**: Current session spending
-- **Daily Cost**: Cumulative daily spending across all sessions
-- **Burn Rate**: Tokens/min + $/hour
-
-### Color Coding
-- 🟢 **Green**: < 50% (all good)
-- 🟡 **Yellow**: 50-80% (attention)
-- 🔴 **Red**: > 80% (critical)
-
-### Warning System
-Warnings only appear when there's a problem:
-- `🔥 16K t/m ⚠️ 45m @12:40` - Will hit limit BEFORE reset
-- `7d: 60% ⚠️` - Usage exceeds expected rate
-
-## Requirements
-
-- **macOS** or **Linux/WSL**
-- `jq` for JSON parsing
-- `curl` for API calls
-
-```bash
-# macOS
-brew install jq
-
-# Linux/WSL
-sudo apt install jq
-```
 
 ## Installation
 
-### Plugin Install (Recommended)
-
-Install as a Claude Code plugin for automatic updates:
+**Requires:** `jq` (`brew install jq` / `apt install jq`)
 
 ```bash
-# Add the marketplace
+# Add marketplace
 claude plugin marketplace add Benniphx/claude-statusline
 
-# Install the plugin
+# Install
 claude plugin install statusline
+
+# Update
+claude plugin update statusline@claude-statusline
 ```
 
-The plugin automatically:
-- Installs `statusline.sh` to `~/.claude/`
-- Configures `settings.json`
-- Updates on plugin update
+Restart Claude Code after install.
 
-### Upgrading from v1.x
+## Usage
 
-If you had a previous version installed and see `[Update]` after installing the plugin:
+Works automatically after install. Auto-detects account type:
+- **Subscription**: Shows rate limits
+- **API-Key**: Shows costs
+
+Run `/statusline:config` to troubleshoot.
+
+## Screenshots
+
+### Subscription Mode
+![Subscription](./screenshots/subscription.png)
+- Context: `Ctx: ████░░░░ 45% (90K/200K)`
+- 5h limit: `5h: ██████░░ 72% →1h23m @14:30`
+- Burn rate: `🔥 12.5K t/m` (warning if hitting limit before reset)
+- 7d limit: `7d: ███░░░░░ 35% →4d @17.01`
+
+### API-Key Mode
+![API-Key](./screenshots/api-key.png)
+- Session cost: `💰 $0.42`
+- Daily cost: `📅 $3.85`
+- Burn rate: `🔥 8.2K t/m $1.20/h`
+
+### Color Coding
+- 🟢 Green: < 50%
+- 🟡 Yellow: 50-80%
+- 🔴 Red: > 80%
+
+## Manual Installation
+
+If you prefer not to use the plugin system:
 
 ```bash
+# Download
 curl -o ~/.claude/statusline.sh https://raw.githubusercontent.com/Benniphx/claude-statusline/main/scripts/statusline.sh
 chmod +x ~/.claude/statusline.sh
 ```
 
-Then restart Claude Code.
-
-### Manual Install
-
-```bash
-# Download the script
-curl -o ~/.claude/statusline.sh https://raw.githubusercontent.com/Benniphx/claude-statusline/main/scripts/statusline.sh
-chmod +x ~/.claude/statusline.sh
-
-# Add to Claude Code settings (~/.claude/settings.json)
+Add to `~/.claude/settings.json`:
+```json
 {
   "statusLine": {
     "type": "command",
@@ -95,94 +82,20 @@ chmod +x ~/.claude/statusline.sh
 }
 ```
 
-## Plugin Commands
+## Cache & Credentials
 
-When installed as a plugin:
+**Cache files** (in `/tmp/` or `$CLAUDE_CODE_TMPDIR`):
+- `claude_rate_limit_cache.json` (60s TTL)
+- `claude_display_cache.json`
+- `claude_daily_cost_YYYY-MM-DD.txt`
 
-- `/statusline:config` - Check configuration and troubleshoot issues
-
-## Configuration
-
-The script auto-detects your account type:
-- **Subscription (OAuth)**: Shows rate limits from Anthropic API
-- **API-Key**: Shows cost tracking
-
-No configuration needed - just install and restart Claude Code.
-
-### Credential Storage
-
+**Credentials:**
 | Platform | Location |
 |----------|----------|
-| macOS | Keychain (`Claude Code-credentials`) |
-| Linux/WSL | `~/.claude/.credentials.json` or `~/.claude/credentials.json` |
-| All | `CLAUDE_CODE_OAUTH_TOKEN` environment variable (highest priority) |
-
-## Cache Files
-
-The script uses temporary cache files to minimize API calls:
-- `/tmp/claude_rate_limit_cache.json` - Rate limit data (60s TTL)
-- `/tmp/claude_display_cache.json` - Fallback display values
-- `/tmp/claude_daily_cost_YYYY-MM-DD.txt` - Daily cost tracking
-- `/tmp/claude_statusline_update.txt` - Update check cache (24h TTL)
-
-Cache is automatically invalidated when rate limit resets.
-
-## Troubleshooting
-
-### No rate limit data showing
-
-**macOS:**
-```bash
-# Check if OAuth credentials exist
-security find-generic-password -s "Claude Code-credentials" -w | jq '.claudeAiOauth'
-```
-
-**Linux/WSL:**
-```bash
-# Check if credentials file exists
-cat ~/.claude/.credentials.json | jq '.claudeAiOauth'
-```
-
-**Clear cache and retry:**
-```bash
-rm -f /tmp/claude_rate_limit_cache.json /tmp/claude_display_cache.json
-```
-
-### Wrong timezone
-The script converts UTC timestamps from the API to your local timezone automatically.
-
-## Development
-
-### Running Tests
-
-```bash
-./tests/test_statusline.sh
-```
-
-### Project Structure
-
-```
-claude-statusline/
-├── .claude-plugin/
-│   └── plugin.json       # Plugin manifest
-├── commands/
-│   └── config.md         # /statusline:config command
-├── hooks/
-│   └── hooks.json        # SessionStart hook
-├── scripts/
-│   ├── statusline.sh     # Main status line script
-│   └── install.sh        # Auto-installer
-├── tests/
-│   └── test_statusline.sh
-└── .github/
-    └── workflows/
-        └── test.yml      # CI pipeline
-```
+| macOS | Keychain |
+| Linux | `~/.claude/.credentials.json` |
+| Override | `$CLAUDE_CODE_OAUTH_TOKEN` |
 
 ## License
 
-MIT License - feel free to use and modify.
-
-## Contributing
-
-Issues and PRs welcome!
+MIT
