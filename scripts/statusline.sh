@@ -1,11 +1,14 @@
 #!/bin/bash
-# Claude Code Statusline v2.0.4
+# Claude Code Statusline v2.0.5
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="2.0.4"
+VERSION="2.0.5"
 
 export LC_NUMERIC=C
 input=$(cat)
+
+# Cache directory (respects CLAUDE_CODE_TMPDIR)
+CACHE_DIR="${CLAUDE_CODE_TMPDIR:-/tmp}"
 
 # === Cross-Platform Helpers ===
 
@@ -80,7 +83,7 @@ sed_inplace() {
 }
 
 # === Update Check (once daily) ===
-UPDATE_CACHE="/tmp/claude_statusline_update.txt"
+UPDATE_CACHE="$CACHE_DIR/claude_statusline_update.txt"
 UPDATE_NOTICE=""
 
 # Version comparison helper: returns 0 if v1 > v2, 1 otherwise
@@ -172,7 +175,15 @@ if [ "$TOTAL_TOKENS" -gt "$CONTEXT_SIZE" ]; then
 else
     DISPLAY_TOKENS="$TOTAL_TOKENS"
 fi
-PERCENT_USED=$((DISPLAY_TOKENS * 100 / CONTEXT_SIZE))
+
+# Use API-provided percentage if available (v2.1.6+), otherwise calculate
+CTX_PERCENT=$(echo "$input" | jq -r '.context_window.used_percentage // empty' 2>/dev/null)
+if [ -n "$CTX_PERCENT" ] && [ "$CTX_PERCENT" != "null" ]; then
+    PERCENT_USED=${CTX_PERCENT%.*}  # Convert to integer
+    PERCENT_USED=${PERCENT_USED:-0}
+else
+    PERCENT_USED=$((DISPLAY_TOKENS * 100 / CONTEXT_SIZE))
+fi
 DURATION_MIN=$((DURATION_MS / 60000))
 
 # Burn Rate
@@ -269,8 +280,8 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
     # SUBSCRIPTION MODE - Rate Limits
     # ==========================================
 
-    RATE_CACHE="/tmp/claude_rate_limit_cache.json"
-    DISPLAY_CACHE="/tmp/claude_display_cache.json"
+    RATE_CACHE="$CACHE_DIR/claude_rate_limit_cache.json"
+    DISPLAY_CACHE="$CACHE_DIR/claude_display_cache.json"
     RATE_CACHE_AGE=60
 
     fetch_rate_limits() {
@@ -325,12 +336,16 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     fi
 
-    # Fallback to display cache
+    # Fallback to display cache (only if < 60s old to prevent flash from stale data)
     if [ -z "$FIVE_HOUR_PERCENT" ] && [ -f "$DISPLAY_CACHE" ]; then
-        FIVE_HOUR_PERCENT=$(jq -r '.five_hour_percent // empty' "$DISPLAY_CACHE" 2>/dev/null)
-        FIVE_HOUR_RESET=$(jq -r '.five_hour_reset // empty' "$DISPLAY_CACHE" 2>/dev/null)
-        SEVEN_DAY_PERCENT=$(jq -r '.seven_day_percent // empty' "$DISPLAY_CACHE" 2>/dev/null)
-        SEVEN_DAY_RESET=$(jq -r '.seven_day_reset // empty' "$DISPLAY_CACHE" 2>/dev/null)
+        DISPLAY_CACHE_AGE=$(( $(date +%s) - $(get_file_mtime "$DISPLAY_CACHE") ))
+        if [ "$DISPLAY_CACHE_AGE" -lt 60 ]; then
+            FIVE_HOUR_PERCENT=$(jq -r '.five_hour_percent // empty' "$DISPLAY_CACHE" 2>/dev/null)
+            FIVE_HOUR_RESET=$(jq -r '.five_hour_reset // empty' "$DISPLAY_CACHE" 2>/dev/null)
+            SEVEN_DAY_PERCENT=$(jq -r '.seven_day_percent // empty' "$DISPLAY_CACHE" 2>/dev/null)
+            SEVEN_DAY_RESET=$(jq -r '.seven_day_reset // empty' "$DISPLAY_CACHE" 2>/dev/null)
+        fi
+        # If cache too old, we'll show "--" until fresh data arrives
     fi
 
     # Save to display cache
@@ -525,10 +540,10 @@ else
     # ==========================================
 
     TODAY=$(date +%Y-%m-%d)
-    COST_TRACKER="/tmp/claude_daily_cost_${TODAY}.txt"
+    COST_TRACKER="$CACHE_DIR/claude_daily_cost_${TODAY}.txt"
 
     # Clean old trackers
-    find /tmp -name "claude_daily_cost_*.txt" ! -name "claude_daily_cost_${TODAY}.txt" -delete 2>/dev/null
+    find "$CACHE_DIR" -name "claude_daily_cost_*.txt" ! -name "claude_daily_cost_${TODAY}.txt" -delete 2>/dev/null
 
     SESSION_COST="$COST"
 
