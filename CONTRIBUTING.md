@@ -30,10 +30,20 @@ git commit -m "feat: v2.0.X - short description"
 git tag -a v2.0.X -m "v2.0.X"
 git push origin main --tags
 
-# 5. Create GitHub release
-gh release create v2.0.X --title "v2.0.X" --notes "## Changes
+# 5. Create GitHub release (--latest ensures it's not a draft!)
+gh release create v2.0.X --title "v2.0.X" --latest --notes "## Changes
 - Feature 1
 - Fix 2"
+
+# 6. Verify release is published (not Draft!)
+gh release list --limit 1
+# Should show: v2.0.X  Latest  v2.0.X  <date>
+# NOT:         v2.0.X  Draft   v2.0.X  <date>
+```
+
+**Important:** If release shows as `Draft`, publish it with:
+```bash
+gh release edit v2.0.X --draft=false
 ```
 
 ## Development
