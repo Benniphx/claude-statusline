@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.5] - 2026-01-13
+
+### Added
+- Use `context_window.used_percentage` from Claude Code v2.1.6+ API when available
+- Respect `CLAUDE_CODE_TMPDIR` environment variable for all cache files
+- Version consistency check now includes README badge
+
+### Fixed
+- Display cache TTL reduced to 60s to prevent flash of stale rate limit data on session start
+
 ## [2.0.4] - 2026-01-08
 
 ### Fixed

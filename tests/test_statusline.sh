@@ -80,11 +80,12 @@ V_SCRIPT=$(grep -o 'VERSION="[^"]*"' "$STATUSLINE" | cut -d'"' -f2)
 V_PLUGIN=$(jq -r '.version' "$PROJECT_ROOT/.claude-plugin/plugin.json")
 V_MARKET=$(jq -r '.plugins[0].version' "$PROJECT_ROOT/.claude-plugin/marketplace.json")
 V_README=$(grep -o 'version-[0-9.]*-blue' "$PROJECT_ROOT/README.md" | sed 's/version-//;s/-blue//')
+V_CHANGELOG=$(grep -o '## \[[0-9.]*\]' "$PROJECT_ROOT/CHANGELOG.md" | head -1 | tr -d '[]# ')
 
-if [ "$V_SCRIPT" = "$V_PLUGIN" ] && [ "$V_PLUGIN" = "$V_MARKET" ] && [ "$V_MARKET" = "$V_README" ]; then
+if [ "$V_SCRIPT" = "$V_PLUGIN" ] && [ "$V_PLUGIN" = "$V_MARKET" ] && [ "$V_MARKET" = "$V_README" ] && [ "$V_README" = "$V_CHANGELOG" ]; then
     pass "All versions match: $V_SCRIPT"
 else
-    fail "Version mismatch!" "all same" "script=$V_SCRIPT, plugin.json=$V_PLUGIN, marketplace.json=$V_MARKET, README=$V_README"
+    fail "Version mismatch!" "all same" "script=$V_SCRIPT, plugin=$V_PLUGIN, marketplace=$V_MARKET, README=$V_README, CHANGELOG=$V_CHANGELOG"
 fi
 
 # Test 3: Cross-platform helpers exist
