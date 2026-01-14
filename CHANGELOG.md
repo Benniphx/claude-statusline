@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.7] - 2026-01-14
+
+### Fixed
+- **Session ID stability**: PPID could change between statusline invocations, causing each call to be treated as a new session and inflating daily costs by 70x+
+- Now walks process tree to find the actual Claude process PID for stable session tracking
+- Falls back to safer replace-based accounting when stable ID unavailable
+
+### Credits
+- Fix contributed by [@omarkohl](https://github.com/omarkohl) in [#2](https://github.com/Benniphx/claude-statusline/pull/2)
+
 ## [2.0.6] - 2026-01-13
 
 ### Fixed
