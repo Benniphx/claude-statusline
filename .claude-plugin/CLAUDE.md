@@ -10,4 +10,11 @@
 | #2399 | 1:52 PM | 🔴 | Fixed Daily Cost Tracking for Resumed Sessions | ~516 |
 | #2395 | 1:51 PM | ✅ | Statusline Plugin Version Bumped to v2.0.6 | ~321 |
 | #2394 | " | ✅ | Marketplace Plugin Metadata Updated to v2.0.6 | ~228 |
+
+### Jan 16, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2832 | 10:51 AM | ✅ | Plugin Version Bumped to Beta Release | ~194 |
+| #2827 | 10:30 AM | 🔵 | Claude Statusline Plugin Architecture and Current Capabilities | ~952 |
 </claude-mem-context>
