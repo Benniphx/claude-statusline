@@ -82,6 +82,16 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
+## Configuration
+
+Optional config file: `~/.claude-statusline.conf`
+
+```bash
+# Context window warning threshold (1-100)
+# Shows ⚠️ when context usage exceeds this percentage
+CONTEXT_WARNING_THRESHOLD=75
+```
+
 ## Cache & Credentials
 
 **Cache files** (in `/tmp/` or `$CLAUDE_CODE_TMPDIR`):

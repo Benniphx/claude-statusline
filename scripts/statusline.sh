@@ -2,10 +2,33 @@
 # Claude Code Statusline v2.0.7
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="2.0.7"
+VERSION="2.1.0-beta.1"
 
 export LC_NUMERIC=C
 input=$(cat)
+
+# === User Configuration ===
+# Config file: ~/.claude-statusline.conf
+# Example content:
+#   CONTEXT_WARNING_THRESHOLD=75
+#
+CONFIG_FILE="$HOME/.claude-statusline.conf"
+CONTEXT_WARNING_THRESHOLD=""  # Empty = disabled (uses default color scheme)
+
+if [ -f "$CONFIG_FILE" ]; then
+    # Source config file (only specific variables for security)
+    while IFS='=' read -r key value; do
+        key=$(echo "$key" | tr -d '[:space:]')
+        value=$(echo "$value" | tr -d '[:space:]')
+        case "$key" in
+            CONTEXT_WARNING_THRESHOLD)
+                if [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -ge 1 ] && [ "$value" -le 100 ]; then
+                    CONTEXT_WARNING_THRESHOLD="$value"
+                fi
+                ;;
+        esac
+    done < "$CONFIG_FILE"
+fi
 
 # Cache directory (respects CLAUDE_CODE_TMPDIR)
 CACHE_DIR="${CLAUDE_CODE_TMPDIR:-/tmp}"
@@ -295,6 +318,12 @@ else
     CTX_COLOR="$RED"
 fi
 
+# Context Warning (configurable threshold)
+CONTEXT_WARNING=""
+if [ -n "$CONTEXT_WARNING_THRESHOLD" ] && [ "$PERCENT_USED" -ge "$CONTEXT_WARNING_THRESHOLD" ]; then
+    CONTEXT_WARNING=" ⚠️"
+fi
+
 # Format tokens
 if [ "$DISPLAY_TOKENS" -gt 1000 ]; then
     TOKENS_FMT=$(awk "BEGIN {printf \"%.1f\", $DISPLAY_TOKENS / 1000}")K
@@ -576,7 +605,7 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
     fi
 
     # OUTPUT: Subscription
-    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
+    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
 
 else
     # ==========================================
@@ -703,5 +732,5 @@ else
     fi
 
     # OUTPUT: API-Key
-    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  💰 ${COST_COLOR}\$${SESSION_FMT}${RESET}  ${DIM}│${RESET}  📅 ${DAILY_COLOR}\$${DAILY_FMT}${RESET}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
+    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  💰 ${COST_COLOR}\$${SESSION_FMT}${RESET}  ${DIM}│${RESET}  📅 ${DAILY_COLOR}\$${DAILY_FMT}${RESET}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
 fi
