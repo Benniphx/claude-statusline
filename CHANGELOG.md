@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0-beta.1] - 2026-01-26
+
+### Added
+- **[EXPERIMENTAL] Background daemon** - Keeps rate limit cache fresh across all sessions
+  - Auto-starts on session start via plugin hook
+  - Refreshes every 15 seconds
+  - Auto-stops when no Claude processes running (~60s idle)
+  - Start manually: `~/.claude/statusline.sh --daemon`
+  - Check status: `cat /tmp/claude_statusline_daemon.log`
+
 ## [3.0.3] - 2026-01-26
 
 ### Fixed

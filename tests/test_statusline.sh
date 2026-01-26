@@ -79,8 +79,8 @@ echo "Test: Version consistency across all files"
 V_SCRIPT=$(grep -o 'VERSION="[^"]*"' "$STATUSLINE" | cut -d'"' -f2)
 V_PLUGIN=$(jq -r '.version' "$PROJECT_ROOT/.claude-plugin/plugin.json")
 V_MARKET=$(jq -r '.plugins[0].version' "$PROJECT_ROOT/.claude-plugin/marketplace.json")
-V_README=$(grep -o 'version-[0-9.]*-blue' "$PROJECT_ROOT/README.md" | sed 's/version-//;s/-blue//')
-V_CHANGELOG=$(grep -o '## \[[0-9.]*\]' "$PROJECT_ROOT/CHANGELOG.md" | head -1 | tr -d '[]# ')
+V_README=$(grep -o 'version-[0-9a-z.\-]*-blue' "$PROJECT_ROOT/README.md" | sed 's/version-//;s/-blue//' | sed 's/--/-/')
+V_CHANGELOG=$(grep -o '## \[[0-9a-z.\-]*\]' "$PROJECT_ROOT/CHANGELOG.md" | head -1 | tr -d '[]# ')
 
 if [ "$V_SCRIPT" = "$V_PLUGIN" ] && [ "$V_PLUGIN" = "$V_MARKET" ] && [ "$V_MARKET" = "$V_README" ] && [ "$V_README" = "$V_CHANGELOG" ]; then
     pass "All versions match: $V_SCRIPT"
@@ -403,6 +403,14 @@ if grep -q 'fetch_rate_limits[^_a-z]' "$STATUSLINE" 2>/dev/null; then
     fail "Found undefined fetch_rate_limits call" "only _atomic calls" "bare call found"
 else
     pass "All fetch_rate_limits calls use _atomic variant"
+fi
+
+# Test 31: Daemon mode exists
+echo "Test: Daemon mode exists"
+if grep -q '\-\-daemon' "$STATUSLINE" && grep -q 'DAEMON_LOCK' "$STATUSLINE"; then
+    pass "Daemon mode present"
+else
+    fail "Daemon mode missing" "--daemon and DAEMON_LOCK" "not found"
 fi
 
 # ============================================
