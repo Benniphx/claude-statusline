@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0-beta.3] - 2026-01-26
+
+### Changed
+- **Smart burn rate display** - Only shows split view when other sessions are active
+  - Single session: `🔥 12K t/m` (simple)
+  - Multiple sessions: `🔥 60K↑ (12K)` (shows global + local)
+  - Threshold: split view when global > local × 1.3
+
 ## [3.1.0-beta.2] - 2026-01-26
 
 ### Added
