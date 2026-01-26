@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v2.0.7
+# Claude Code Statusline v3.0.0
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="2.1.0-beta.1"
+VERSION="3.0.0"
 
 export LC_NUMERIC=C
 input=$(cat)
@@ -11,9 +11,13 @@ input=$(cat)
 # Config file: ~/.claude-statusline.conf
 # Example content:
 #   CONTEXT_WARNING_THRESHOLD=75
+#   RATE_CACHE_TTL=30
+#   WORK_DAYS_PER_WEEK=5
 #
 CONFIG_FILE="$HOME/.claude-statusline.conf"
 CONTEXT_WARNING_THRESHOLD=""  # Empty = disabled (uses default color scheme)
+RATE_CACHE_TTL=15             # Seconds between API refreshes (10-120)
+WORK_DAYS_PER_WEEK=5          # 5 = Mon-Fri, 7 = all days (for 7d pace calculation)
 
 if [ -f "$CONFIG_FILE" ]; then
     # Source config file (only specific variables for security)
@@ -24,6 +28,16 @@ if [ -f "$CONFIG_FILE" ]; then
             CONTEXT_WARNING_THRESHOLD)
                 if [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -ge 1 ] && [ "$value" -le 100 ]; then
                     CONTEXT_WARNING_THRESHOLD="$value"
+                fi
+                ;;
+            RATE_CACHE_TTL)
+                if [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -ge 10 ] && [ "$value" -le 120 ]; then
+                    RATE_CACHE_TTL="$value"
+                fi
+                ;;
+            WORK_DAYS_PER_WEEK)
+                if [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -ge 1 ] && [ "$value" -le 7 ]; then
+                    WORK_DAYS_PER_WEEK="$value"
                 fi
                 ;;
         esac
@@ -103,6 +117,36 @@ sed_inplace() {
     else
         sed -i "$@"
     fi
+}
+
+# Count work days between two epochs (excludes weekends if WORK_DAYS_PER_WEEK=5)
+count_work_days() {
+    local start_epoch="$1"
+    local end_epoch="$2"
+    local total_days=$(( (end_epoch - start_epoch) / 86400 ))
+
+    if [ "$WORK_DAYS_PER_WEEK" -eq 7 ]; then
+        echo "$total_days"
+        return
+    fi
+
+    # Count weekends in the range
+    local work_days=0
+    local current_epoch="$start_epoch"
+    while [ "$current_epoch" -lt "$end_epoch" ]; do
+        local dow
+        if $IS_MACOS; then
+            dow=$(date -j -f "%s" "$current_epoch" "+%u" 2>/dev/null)
+        else
+            dow=$(date -d "@$current_epoch" "+%u" 2>/dev/null)
+        fi
+        # %u: Monday=1, Sunday=7
+        if [ "${dow:-1}" -le 5 ]; then
+            work_days=$((work_days + 1))
+        fi
+        current_epoch=$((current_epoch + 86400))
+    done
+    echo "$work_days"
 }
 
 # Get stable session ID by walking process tree to find Claude Code
@@ -309,6 +353,13 @@ make_bar() {
     echo -e "$bar"
 }
 
+# Initial context fix: Don't show misleading "0%" at session start
+# If 0% and 0 minutes, data isn't available yet - show "--"
+SHOW_CTX_PERCENT=true
+if [ "$PERCENT_USED" -eq 0 ] && [ "$DURATION_MIN" -eq 0 ]; then
+    SHOW_CTX_PERCENT=false
+fi
+
 # Context Color
 if [ "$PERCENT_USED" -lt 50 ]; then
     CTX_COLOR="$GREEN"
@@ -322,6 +373,13 @@ fi
 CONTEXT_WARNING=""
 if [ -n "$CONTEXT_WARNING_THRESHOLD" ] && [ "$PERCENT_USED" -ge "$CONTEXT_WARNING_THRESHOLD" ]; then
     CONTEXT_WARNING=" ⚠️"
+fi
+
+# Context percent display (handle initial "0%" case)
+if [ "$SHOW_CTX_PERCENT" = true ]; then
+    CTX_PERCENT_DISPLAY="${PERCENT_USED}%"
+else
+    CTX_PERCENT_DISPLAY="--"
 fi
 
 # Format tokens
@@ -355,36 +413,46 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
 
     RATE_CACHE="$CACHE_DIR/claude_rate_limit_cache.json"
     DISPLAY_CACHE="$CACHE_DIR/claude_display_cache.json"
-    RATE_CACHE_AGE=60
 
-    fetch_rate_limits() {
+    # Atomic write: write to temp, then rename (prevents empty reads)
+    fetch_rate_limits_atomic() {
         local TOKEN
         TOKEN=$(echo "$CREDS" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null)
         if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
-            curl -s --max-time 3 "https://api.anthropic.com/api/oauth/usage" \
+            local TEMP_FILE="${RATE_CACHE}.tmp.$$"
+            local RESULT
+            RESULT=$(curl -s --max-time 3 "https://api.anthropic.com/api/oauth/usage" \
                 -H "Authorization: Bearer $TOKEN" \
                 -H "anthropic-beta: oauth-2025-04-20" \
-                -H "Content-Type: application/json" 2>/dev/null
+                -H "Content-Type: application/json" 2>/dev/null)
+            if [ -n "$RESULT" ] && echo "$RESULT" | jq -e '.five_hour' >/dev/null 2>&1; then
+                echo "$RESULT" > "$TEMP_FILE" 2>/dev/null
+                mv "$TEMP_FILE" "$RATE_CACHE" 2>/dev/null
+            fi
         fi
     }
 
-    # Check cache
+    # Check cache - always read existing data first
     RATE_DATA=""
+    CACHE_EXPIRED=false
     if [ -f "$RATE_CACHE" ]; then
+        RATE_DATA=$(cat "$RATE_CACHE" 2>/dev/null)
         CACHE_MOD=$(get_file_mtime "$RATE_CACHE")
         NOW_SECS=$(date +%s)
-        if [ $((NOW_SECS - CACHE_MOD)) -lt "$RATE_CACHE_AGE" ]; then
-            RATE_DATA=$(cat "$RATE_CACHE" 2>/dev/null)
+        if [ $((NOW_SECS - CACHE_MOD)) -ge "$RATE_CACHE_TTL" ]; then
+            CACHE_EXPIRED=true
         fi
     fi
 
-    if [ -z "$RATE_DATA" ]; then
-        if [ ! -f "$RATE_CACHE" ]; then
-            RATE_DATA=$(fetch_rate_limits)
-            echo "$RATE_DATA" > "$RATE_CACHE" 2>/dev/null
-        else
-            (fetch_rate_limits > "$RATE_CACHE" 2>/dev/null) &
+    # Refresh in background if expired (but keep using old data)
+    if [ "$CACHE_EXPIRED" = true ] || [ -z "$RATE_DATA" ]; then
+        if [ -z "$RATE_DATA" ]; then
+            # No data at all - fetch synchronously
+            fetch_rate_limits_atomic
             RATE_DATA=$(cat "$RATE_CACHE" 2>/dev/null)
+        else
+            # Have old data - refresh in background, keep using old
+            (fetch_rate_limits_atomic) &
         fi
     fi
 
@@ -409,10 +477,10 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     fi
 
-    # Fallback to display cache (only if < 60s old to prevent flash from stale data)
+    # Fallback to display cache (only if fresh to prevent flash from stale data)
     if [ -z "$FIVE_HOUR_PERCENT" ] && [ -f "$DISPLAY_CACHE" ]; then
         DISPLAY_CACHE_AGE=$(( $(date +%s) - $(get_file_mtime "$DISPLAY_CACHE") ))
-        if [ "$DISPLAY_CACHE_AGE" -lt 60 ]; then
+        if [ "$DISPLAY_CACHE_AGE" -lt "$RATE_CACHE_TTL" ]; then
             FIVE_HOUR_PERCENT=$(jq -r '.five_hour_percent // empty' "$DISPLAY_CACHE" 2>/dev/null)
             FIVE_HOUR_RESET=$(jq -r '.five_hour_reset // empty' "$DISPLAY_CACHE" 2>/dev/null)
             SEVEN_DAY_PERCENT=$(jq -r '.seven_day_percent // empty' "$DISPLAY_CACHE" 2>/dev/null)
@@ -457,17 +525,22 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     fi
 
-    # 7d Reset date
+    # 7d Reset date (with time if ≤2 days remaining)
     SEVEN_DAY_RESET_DATE=""
     SEVEN_DAY_DAYS_LEFT=""
     if [ -n "$SEVEN_DAY_RESET" ] && [ "$SEVEN_DAY_RESET" != "null" ] && [ "$SEVEN_DAY_RESET" != "" ]; then
         SEVEN_DAY_EPOCH=$(parse_iso_date "$SEVEN_DAY_RESET")
         if [ "$SEVEN_DAY_EPOCH" -gt 0 ]; then
-            SEVEN_DAY_RESET_DATE=$(format_time "$SEVEN_DAY_EPOCH" "%d.%m")
             NOW_EPOCH=$(date +%s)
             DAYS_LEFT=$(( (SEVEN_DAY_EPOCH - NOW_EPOCH) / 86400 ))
             if [ "$DAYS_LEFT" -gt 0 ]; then
                 SEVEN_DAY_DAYS_LEFT="${DAYS_LEFT}d"
+            fi
+            # Show time when ≤2 days remaining (more precision needed)
+            if [ "$DAYS_LEFT" -le 2 ]; then
+                SEVEN_DAY_RESET_DATE=$(format_time "$SEVEN_DAY_EPOCH" "%d.%m %H:%M")
+            else
+                SEVEN_DAY_RESET_DATE=$(format_time "$SEVEN_DAY_EPOCH" "%d.%m")
             fi
         fi
     fi
@@ -493,16 +566,80 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         RATE_7D_COLOR="$RED"
     fi
 
-    # Format rate display
+    # Progress Bars
+    RATE_5H_BAR=$(make_bar "${FIVE_HOUR_INT:-0}" 8)
+    RATE_7D_BAR=$(make_bar "${SEVEN_DAY_INT:-0}" 8)
+
+    # Calculate Pace and check if hitting limit before reset
+    PACE_DISPLAY=""
+    PACE_COLOR="$GREEN"
+    HITTING_LIMIT=false
+    REMAINING_SECS_UNTIL_RESET=0
+
     if [ -n "$FIVE_HOUR_PERCENT" ] && [ "$FIVE_HOUR_PERCENT" != "null" ]; then
         FIVE_HOUR_FMT=$(awk "BEGIN {printf \"%.0f\", $FIVE_HOUR_PERCENT}" 2>/dev/null)
         SEVEN_DAY_FMT=$(awk "BEGIN {printf \"%.0f\", $SEVEN_DAY_PERCENT}" 2>/dev/null)
-        if [ -n "$RESET_INFO" ] && [ -n "$RESET_TIME_LOCAL" ]; then
-            RATE_DISPLAY="${RATE_5H_COLOR}${FIVE_HOUR_FMT}%${RESET} ${DIM}→${RESET}${BLUE}${RESET_INFO}${RESET} ${DIM}@${RESET}${CYAN}${RESET_TIME_LOCAL}${RESET}"
-        elif [ -n "$RESET_INFO" ]; then
-            RATE_DISPLAY="${RATE_5H_COLOR}${FIVE_HOUR_FMT}%${RESET} ${DIM}→${RESET}${BLUE}${RESET_INFO}${RESET}"
-        else
-            RATE_DISPLAY="${RATE_5H_COLOR}${FIVE_HOUR_FMT}%${RESET}"
+        FIVE_HOUR_FLT=$(awk "BEGIN {print $FIVE_HOUR_PERCENT + 0}" 2>/dev/null)
+
+        # Calculate %/h and Pace
+        if [ "$FIVE_HOUR_FLT" != "0" ] && [ -n "$RESET_EPOCH" ] && [ "$RESET_EPOCH" -gt 0 ]; then
+            NOW_EPOCH_CALC=$(date +%s)
+            REMAINING_SECS_UNTIL_RESET=$((RESET_EPOCH - NOW_EPOCH_CALC))
+            SECS_SINCE_START=$((18000 - REMAINING_SECS_UNTIL_RESET))  # 5h = 18000 sec
+
+            if [ "$SECS_SINCE_START" -gt 60 ]; then
+                HOURS_SINCE_START=$(awk "BEGIN {print $SECS_SINCE_START / 3600}" 2>/dev/null)
+                PERCENT_PER_HOUR=$(awk "BEGIN {printf \"%.1f\", $FIVE_HOUR_FLT / $HOURS_SINCE_START}" 2>/dev/null)
+
+                # Pace: 20%/h = sustainable (1.0x)
+                PACE=$(awk "BEGIN {printf \"%.1f\", $PERCENT_PER_HOUR / 20}" 2>/dev/null)
+                PACE_INT=$(awk "BEGIN {printf \"%.0f\", $PACE * 10}" 2>/dev/null)
+
+                if [ "${PACE_INT:-0}" -lt 10 ]; then
+                    PACE_COLOR="$GREEN"   # < 1.0x = sustainable
+                elif [ "${PACE_INT:-0}" -lt 15 ]; then
+                    PACE_COLOR="$YELLOW"  # 1.0-1.5x = elevated
+                else
+                    PACE_COLOR="$RED"     # > 1.5x = burning fast
+                fi
+                PACE_DISPLAY="${PACE}x"
+
+                # Check if hitting limit before reset
+                REMAINING_PERCENT=$(awk "BEGIN {print 100 - $FIVE_HOUR_FLT}" 2>/dev/null)
+                if [ "$(awk "BEGIN {print ($REMAINING_PERCENT > 0 && $PERCENT_PER_HOUR > 0) ? 1 : 0}")" = "1" ]; then
+                    RUNWAY_MIN=$(awk "BEGIN {printf \"%.0f\", ($REMAINING_PERCENT / $PERCENT_PER_HOUR) * 60}" 2>/dev/null)
+                    RUNWAY_SECS=$((RUNWAY_MIN * 60))
+                    if [ "$RUNWAY_SECS" -lt "$REMAINING_SECS_UNTIL_RESET" ]; then
+                        HITTING_LIMIT=true
+                    fi
+                fi
+            fi
+        fi
+
+        # Build 5h display: Percent + Pace + Time (dynamic based on reset proximity)
+        # Format: "72% 1.3x" or "85% 1.3x →45m" or "92% 1.3x →12m @14:30"
+        RATE_DISPLAY="${RATE_5H_COLOR}${FIVE_HOUR_FMT}%${RESET}"
+
+        if [ -n "$PACE_DISPLAY" ]; then
+            RATE_DISPLAY+=" ${PACE_COLOR}${PACE_DISPLAY}${RESET}"
+        fi
+
+        # Add warning if hitting limit before reset
+        if [ "$HITTING_LIMIT" = true ]; then
+            RATE_DISPLAY+=" ${RED}⚠️${RESET}"
+        fi
+
+        # Add time info based on proximity to reset
+        if [ "$REMAINING_SECS_UNTIL_RESET" -gt 0 ]; then
+            REMAINING_MIN=$((REMAINING_SECS_UNTIL_RESET / 60))
+            if [ "$REMAINING_MIN" -le 30 ] && [ -n "$RESET_INFO" ] && [ -n "$RESET_TIME_LOCAL" ]; then
+                # ≤30min: show both duration and time
+                RATE_DISPLAY+=" ${DIM}→${RESET}${CYAN}${RESET_INFO}${RESET} ${DIM}@${RESET}${CYAN}${RESET_TIME_LOCAL}${RESET}"
+            elif [ "$REMAINING_MIN" -le 60 ] && [ -n "$RESET_INFO" ]; then
+                # ≤1h: show just duration
+                RATE_DISPLAY+=" ${DIM}→${RESET}${CYAN}${RESET_INFO}${RESET}"
+            fi
+            # >1h: no time shown
         fi
     else
         RATE_DISPLAY="${DIM}--${RESET}"
@@ -511,101 +648,68 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         SEVEN_DAY_INT=0
     fi
 
-    # Progress Bars
-    RATE_5H_BAR=$(make_bar "${FIVE_HOUR_INT:-0}" 8)
-    RATE_7D_BAR=$(make_bar "${SEVEN_DAY_INT:-0}" 8)
-
-    # Burn Rate + ETA
-    ETA_DISPLAY=""
-    if [ "$TOKENS_PER_MIN" != "--" ] && [ -n "$FIVE_HOUR_PERCENT" ] && [ "$FIVE_HOUR_PERCENT" != "null" ]; then
-        # Format tokens/min
-        TPM_INT=${TOKENS_PER_MIN%.*}
-        if [ "${TPM_INT:-0}" -gt 1000 ]; then
-            TPM_FMT=$(awk "BEGIN {printf \"%.1f\", $TOKENS_PER_MIN / 1000}")K
-        else
-            TPM_FMT="${TOKENS_PER_MIN}"
-        fi
-
-        # Calculate %/h
-        FIVE_HOUR_FLT=$(awk "BEGIN {print $FIVE_HOUR_PERCENT + 0}" 2>/dev/null)
-        PERCENT_PER_HOUR="--"
-        if [ "$FIVE_HOUR_FLT" != "0" ] && [ -n "$RESET_EPOCH" ] && [ "$RESET_EPOCH" -gt 0 ]; then
-            NOW_EPOCH_CALC=$(date +%s)
-            SECS_UNTIL_RESET=$((RESET_EPOCH - NOW_EPOCH_CALC))
-            SECS_SINCE_START=$((18000 - SECS_UNTIL_RESET))  # 5h = 18000 sec
-            if [ "$SECS_SINCE_START" -gt 60 ]; then
-                HOURS_SINCE_START=$(awk "BEGIN {print $SECS_SINCE_START / 3600}" 2>/dev/null)
-                PERCENT_PER_HOUR=$(awk "BEGIN {printf \"%.0f\", $FIVE_HOUR_FLT / $HOURS_SINCE_START}" 2>/dev/null)
-            fi
-        fi
-
-        # ETA calculation
-        REMAINING_PERCENT=$(awk "BEGIN {print 100 - $FIVE_HOUR_FLT}" 2>/dev/null)
-        ETA_TIME=""
-        ETA_COLOR="$CYAN"
-        if [ "$(awk "BEGIN {print ($REMAINING_PERCENT > 0 && $PERCENT_PER_HOUR > 0) ? 1 : 0}")" = "1" ] && [ "$PERCENT_PER_HOUR" != "--" ]; then
-            ETA_MIN=$(awk "BEGIN {printf \"%.0f\", ($REMAINING_PERCENT / $PERCENT_PER_HOUR) * 60}" 2>/dev/null)
-            if [ "${ETA_MIN:-0}" -gt 0 ]; then
-                NOW_EPOCH=$(date +%s)
-                ETA_EPOCH=$((NOW_EPOCH + ETA_MIN * 60))
-                ETA_MIN_RAW=$(format_time "$ETA_EPOCH" "%M")
-                ETA_MIN_ROUNDED=$(( ((ETA_MIN_RAW + 2) / 5) * 5 ))
-                if [ "$ETA_MIN_ROUNDED" -eq 60 ]; then
-                    ETA_TIME=$(format_time "$((ETA_EPOCH + 300))" "%H:00")
-                else
-                    ETA_HOUR=$(format_time "$ETA_EPOCH" "%H")
-                    ETA_TIME=$(printf "%s:%02d" "$ETA_HOUR" "$ETA_MIN_ROUNDED")
-                fi
-                # Color: Red if before reset, Green if after
-                if [ -n "$RESET_EPOCH" ] && [ "$RESET_EPOCH" -gt 0 ]; then
-                    if [ "$ETA_EPOCH" -lt "$RESET_EPOCH" ]; then
-                        ETA_COLOR="$RED"
-                    else
-                        ETA_COLOR="$GREEN"
-                    fi
-                fi
-            fi
-        fi
-
-        # Format burn display
-        if [ -n "$ETA_TIME" ] && [ "${ETA_MIN:-0}" -gt 0 ] && [ "$ETA_COLOR" = "$RED" ]; then
-            if [ "$ETA_MIN" -ge 60 ]; then
-                ETA_DUR_H=$((ETA_MIN / 60))
-                ETA_DUR_M=$((ETA_MIN % 60))
-                ETA_DURATION="${ETA_DUR_H}h${ETA_DUR_M}m"
-            else
-                ETA_DURATION="${ETA_MIN}m"
-            fi
-            BURN_DISPLAY="${MAGENTA}${TPM_FMT}${RESET} ${DIM}t/m${RESET} ${RED}⚠️ ${ETA_DURATION} @${ETA_TIME}${RESET}"
-        else
-            BURN_DISPLAY="${MAGENTA}${TPM_FMT}${RESET} ${DIM}t/m${RESET}"
-        fi
-    else
-        BURN_DISPLAY="${DIM}--${RESET}"
-    fi
-
-    # 7d warning
+    # 7d Pace calculation (based on work days)
+    # Simpler approach: scale calendar days by work day ratio
+    SEVEN_DAY_PACE=""
+    SEVEN_DAY_PACE_COLOR="$GREEN"
     SEVEN_DAY_WARNING=""
-    if [ -n "$SEVEN_DAY_DAYS_LEFT" ] && [ -n "$SEVEN_DAY_FMT" ] && [ "$SEVEN_DAY_FMT" != "--" ]; then
-        DAYS_ELAPSED=$((7 - ${SEVEN_DAY_DAYS_LEFT%d}))
-        if [ "$DAYS_ELAPSED" -gt 0 ]; then
-            EXPECTED_MAX=$(awk "BEGIN {printf \"%.0f\", ($DAYS_ELAPSED / 7) * 100}" 2>/dev/null)
-            if [ "${SEVEN_DAY_FMT:-0}" -gt "${EXPECTED_MAX:-100}" ]; then
-                SEVEN_DAY_WARNING=" ${RED}⚠️${RESET}"
+
+    if [ -n "$SEVEN_DAY_FMT" ] && [ "$SEVEN_DAY_FMT" != "--" ] && [ "${SEVEN_DAY_FMT:-0}" -gt 0 ]; then
+        DAYS_LEFT=${SEVEN_DAY_DAYS_LEFT%d}
+        DAYS_LEFT=${DAYS_LEFT:-0}
+        CALENDAR_DAYS_ELAPSED=$((7 - DAYS_LEFT))
+
+        if [ "$CALENDAR_DAYS_ELAPSED" -gt 0 ]; then
+            # Scale to work days: elapsed_work_days = calendar_days * (work_days_per_week / 7)
+            WORK_DAYS_ELAPSED=$(awk "BEGIN {printf \"%.2f\", $CALENDAR_DAYS_ELAPSED * ($WORK_DAYS_PER_WEEK / 7)}" 2>/dev/null)
+
+            # Sustainable rate = 100% / work_days_per_week
+            # Actual rate = usage% / work_days_elapsed
+            # Pace = actual / sustainable
+            if [ "$(awk "BEGIN {print ($WORK_DAYS_ELAPSED > 0.1) ? 1 : 0}")" = "1" ]; then
+                SUSTAINABLE_PER_DAY=$(awk "BEGIN {print 100 / $WORK_DAYS_PER_WEEK}" 2>/dev/null)
+                ACTUAL_PER_DAY=$(awk "BEGIN {print $SEVEN_DAY_FMT / $WORK_DAYS_ELAPSED}" 2>/dev/null)
+                SEVEN_DAY_PACE_VAL=$(awk "BEGIN {printf \"%.1f\", $ACTUAL_PER_DAY / $SUSTAINABLE_PER_DAY}" 2>/dev/null)
+
+                PACE_7D_INT=$(awk "BEGIN {printf \"%.0f\", $SEVEN_DAY_PACE_VAL * 10}" 2>/dev/null)
+                if [ "${PACE_7D_INT:-0}" -lt 10 ]; then
+                    SEVEN_DAY_PACE_COLOR="$GREEN"
+                elif [ "${PACE_7D_INT:-0}" -lt 15 ]; then
+                    SEVEN_DAY_PACE_COLOR="$YELLOW"
+                else
+                    SEVEN_DAY_PACE_COLOR="$RED"
+                fi
+                SEVEN_DAY_PACE="${SEVEN_DAY_PACE_VAL}x"
+
+                # Warning if pace > 1.0 (will exceed limit)
+                if [ "${PACE_7D_INT:-0}" -gt 10 ]; then
+                    SEVEN_DAY_WARNING=" ${RED}⚠️${RESET}"
+                fi
             fi
         fi
     fi
 
-    if [ -n "$SEVEN_DAY_RESET_DATE" ] && [ -n "$SEVEN_DAY_DAYS_LEFT" ]; then
-        SEVEN_DAY_DISPLAY="${RATE_7D_COLOR}${SEVEN_DAY_FMT:-0}%${RESET}${SEVEN_DAY_WARNING} ${DIM}→${RESET}${CYAN}${SEVEN_DAY_DAYS_LEFT}${RESET} ${DIM}@${RESET}${CYAN}${SEVEN_DAY_RESET_DATE}${RESET}"
-    elif [ -n "$SEVEN_DAY_RESET_DATE" ]; then
-        SEVEN_DAY_DISPLAY="${RATE_7D_COLOR}${SEVEN_DAY_FMT:-0}%${RESET}${SEVEN_DAY_WARNING} ${DIM}→${RESET}${CYAN}${SEVEN_DAY_RESET_DATE}${RESET}"
-    else
-        SEVEN_DAY_DISPLAY="${RATE_7D_COLOR}${SEVEN_DAY_FMT:-0}%${RESET}${SEVEN_DAY_WARNING}"
+    # Build 7d display: Percent + Pace + Days (only when ≤3d)
+    SEVEN_DAY_DISPLAY="${RATE_7D_COLOR}${SEVEN_DAY_FMT:-0}%${RESET}"
+
+    if [ -n "$SEVEN_DAY_PACE" ]; then
+        SEVEN_DAY_DISPLAY+=" ${SEVEN_DAY_PACE_COLOR}${SEVEN_DAY_PACE}${RESET}"
+    fi
+
+    if [ -n "$SEVEN_DAY_WARNING" ]; then
+        SEVEN_DAY_DISPLAY+="${SEVEN_DAY_WARNING}"
+    fi
+
+    # Show days only when ≤3d remaining
+    if [ -n "$SEVEN_DAY_DAYS_LEFT" ]; then
+        DAYS_LEFT_NUM=${SEVEN_DAY_DAYS_LEFT%d}
+        if [ "${DAYS_LEFT_NUM:-7}" -le 3 ]; then
+            SEVEN_DAY_DISPLAY+=" ${DIM}→${RESET}${CYAN}${SEVEN_DAY_DAYS_LEFT}${RESET}"
+        fi
     fi
 
     # OUTPUT: Subscription
-    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
+    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${CTX_PERCENT_DISPLAY}${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
 
 else
     # ==========================================
@@ -732,5 +836,5 @@ else
     fi
 
     # OUTPUT: API-Key
-    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${PERCENT_USED}%${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  💰 ${COST_COLOR}\$${SESSION_FMT}${RESET}  ${DIM}│${RESET}  📅 ${DAILY_COLOR}\$${DAILY_FMT}${RESET}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
+    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${CTX_PERCENT_DISPLAY}${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  💰 ${COST_COLOR}\$${SESSION_FMT}${RESET}  ${DIM}│${RESET}  📅 ${DAILY_COLOR}\$${DAILY_FMT}${RESET}  ${DIM}│${RESET}  🔥 ${BURN_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
 fi

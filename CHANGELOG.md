@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-01-26
+
+### Added
+- **Pace indicator** - Shows consumption speed vs sustainable rate (`1.0x` = on budget)
+  - 5h: `72% 1.3x` means 30% faster than sustainable (20%/hour)
+  - 7d: `35% 0.8x` means 20% under budget (work-day aware)
+- **Work-day aware 7d calculation** - Excludes weekends by default
+  - Configure with `WORK_DAYS_PER_WEEK=5` (Mon-Fri) or `7` (all days)
+- **Smart time display** - Only shows when relevant
+  - 5h: `→45m` when ≤1h, `→12m @14:30` when ≤30m
+  - 7d: `→2d` only shown when ≤3 days remaining
+- **Configurable context warning**: `CONTEXT_WARNING_THRESHOLD=75` shows ⚠️
+- **Configurable cache TTL**: `RATE_CACHE_TTL=15` for fast cross-tab sync
+- **Atomic cache writes** - Prevents empty statusline during refresh
+
+### Changed
+- **Completely redesigned rate limit display** - Cleaner, more informative
+- Removed separate 🔥 burn rate section - integrated into 5h/7d displays
+- More compact statusline with less visual clutter
+- Improved README with tables and pace explanation
+
+### Fixed
+- Initial context no longer shows misleading "0%" at session start
+- Cache race condition that caused empty statusline during refresh
+
 ## [2.0.7] - 2026-01-14
 
 ### Fixed
