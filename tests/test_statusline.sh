@@ -396,6 +396,15 @@ else
     fail "TOTAL_TOKENS=0 check missing" "TOTAL_TOKENS -eq 0 check" "not found"
 fi
 
+# Test 30: No undefined function calls (fetch_rate_limits without _atomic)
+echo "Test: No undefined function calls"
+# Should only have fetch_rate_limits_atomic, not bare fetch_rate_limits
+if grep -q 'fetch_rate_limits[^_a-z]' "$STATUSLINE" 2>/dev/null; then
+    fail "Found undefined fetch_rate_limits call" "only _atomic calls" "bare call found"
+else
+    pass "All fetch_rate_limits calls use _atomic variant"
+fi
+
 # ============================================
 # Summary
 # ============================================

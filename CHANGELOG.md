@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.3] - 2026-01-26
+
+### Fixed
+- **Cache invalidation bug**: Fixed undefined function call `fetch_rate_limits` → `fetch_rate_limits_atomic` when 5h reset time passes
+
 ## [3.0.2] - 2026-01-26
 
 ### Fixed

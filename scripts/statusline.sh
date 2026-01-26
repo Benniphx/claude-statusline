@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v3.0.2
+# Claude Code Statusline v3.0.3
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.0.2"
+VERSION="3.0.3"
 
 export LC_NUMERIC=C
 input=$(cat)
@@ -468,8 +468,8 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         NOW_CHECK=$(date +%s)
         if [ "$RESET_CHECK_EPOCH" -gt 0 ] && [ "$RESET_CHECK_EPOCH" -lt "$NOW_CHECK" ]; then
             rm -f "$RATE_CACHE" "$DISPLAY_CACHE" 2>/dev/null
-            RATE_DATA=$(fetch_rate_limits)
-            echo "$RATE_DATA" > "$RATE_CACHE" 2>/dev/null
+            fetch_rate_limits_atomic
+            RATE_DATA=$(cat "$RATE_CACHE" 2>/dev/null)
             FIVE_HOUR_PERCENT=$(echo "$RATE_DATA" | jq -r '.five_hour.utilization // empty' 2>/dev/null)
             FIVE_HOUR_RESET=$(echo "$RATE_DATA" | jq -r '.five_hour.resets_at // empty' 2>/dev/null)
             SEVEN_DAY_PERCENT=$(echo "$RATE_DATA" | jq -r '.seven_day.utilization // empty' 2>/dev/null)
