@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v3.1.0-beta.1
+# Claude Code Statusline v3.1.0-beta.2
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.1.0-beta.1"
+VERSION="3.1.0-beta.2"
 
 export LC_NUMERIC=C
 
@@ -76,7 +76,46 @@ if [ "$1" = "--daemon" ]; then
                         TEMP_FILE="${RATE_CACHE}.tmp.$MY_PID"
                         echo "$RESULT" > "$TEMP_FILE" 2>/dev/null
                         mv "$TEMP_FILE" "$RATE_CACHE" 2>/dev/null
-                        echo "[$(date '+%H:%M:%S')] Cache refreshed" >> "$DAEMON_LOG"
+
+                        # Calculate global burn rate from 5h% delta
+                        CURRENT_5H=$(echo "$RESULT" | jq -r '.five_hour.utilization' 2>/dev/null)
+                        CURRENT_TS=$(date +%s)
+                        BURN_CACHE="$CACHE_DIR/claude_global_burn.json"
+
+                        if [ -f "$BURN_CACHE" ]; then
+                            PREV_5H=$(jq -r '.five_hour_percent // 0' "$BURN_CACHE" 2>/dev/null)
+                            PREV_TS=$(jq -r '.timestamp // 0' "$BURN_CACHE" 2>/dev/null)
+
+                            if [ -n "$PREV_5H" ] && [ -n "$PREV_TS" ] && [ "$PREV_TS" -gt 0 ]; then
+                                DELTA_PCT=$(awk "BEGIN {print $CURRENT_5H - $PREV_5H}" 2>/dev/null)
+                                DELTA_SECS=$((CURRENT_TS - PREV_TS))
+
+                                # Only calculate if positive delta and reasonable time window
+                                if [ "$DELTA_SECS" -gt 5 ] && [ "$(awk "BEGIN {print ($DELTA_PCT >= 0)}")" = "1" ]; then
+                                    # Convert %/sec to tokens/min (assume 5h limit ~500K tokens)
+                                    # 1% = ~5000 tokens, so %/min * 5000 = tokens/min
+                                    PCT_PER_MIN=$(awk "BEGIN {printf \"%.4f\", ($DELTA_PCT / $DELTA_SECS) * 60}" 2>/dev/null)
+                                    TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.0f\", $PCT_PER_MIN * 5000}" 2>/dev/null)
+
+                                    # Store with smoothing (weighted average with previous)
+                                    PREV_TPM=$(jq -r '.tokens_per_min // 0' "$BURN_CACHE" 2>/dev/null)
+                                    if [ "$PREV_TPM" -gt 0 ] 2>/dev/null; then
+                                        # 70% new, 30% old for smoothing
+                                        TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.0f\", $TOKENS_PER_MIN * 0.7 + $PREV_TPM * 0.3}" 2>/dev/null)
+                                    fi
+                                fi
+                            fi
+                        fi
+
+                        # Write burn rate cache
+                        jq -n \
+                            --arg fh "$CURRENT_5H" \
+                            --arg ts "$CURRENT_TS" \
+                            --arg tpm "${TOKENS_PER_MIN:-0}" \
+                            '{five_hour_percent: ($fh|tonumber), timestamp: ($ts|tonumber), tokens_per_min: ($tpm|tonumber)}' \
+                            > "$BURN_CACHE" 2>/dev/null
+
+                        echo "[$(date '+%H:%M:%S')] Cache refreshed (5h: ${CURRENT_5H}%, burn: ${TOKENS_PER_MIN:-0} t/m)" >> "$DAEMON_LOG"
                     fi
                 fi
             else
@@ -799,15 +838,51 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     fi
 
-    # Burn rate display (tokens/min)
+    # Burn rate display (global + local tokens/min)
+    GLOBAL_BURN_CACHE="$CACHE_DIR/claude_global_burn.json"
+    GLOBAL_TPM=0
+    if [ -f "$GLOBAL_BURN_CACHE" ]; then
+        GLOBAL_TPM=$(jq -r '.tokens_per_min // 0' "$GLOBAL_BURN_CACHE" 2>/dev/null)
+    fi
+
+    # Format local burn rate
+    LOCAL_TPM_FMT="--"
     if [ "$TOKENS_PER_MIN" != "--" ]; then
         TPM_INT=${TOKENS_PER_MIN%.*}
         if [ "${TPM_INT:-0}" -gt 1000 ]; then
-            TPM_FMT=$(awk "BEGIN {printf \"%.1f\", $TOKENS_PER_MIN / 1000}")K
+            LOCAL_TPM_FMT=$(awk "BEGIN {printf \"%.1f\", $TOKENS_PER_MIN / 1000}")K
         else
-            TPM_FMT="${TOKENS_PER_MIN}"
+            LOCAL_TPM_FMT="${TOKENS_PER_MIN%.*}"
         fi
-        BURN_DISPLAY="🔥 ${MAGENTA}${TPM_FMT}${RESET} ${DIM}t/m${RESET}"
+    fi
+
+    # Format global burn rate
+    GLOBAL_TPM_FMT="--"
+    GLOBAL_TPM_INT=${GLOBAL_TPM%.*}
+    if [ "${GLOBAL_TPM_INT:-0}" -gt 100 ]; then
+        if [ "${GLOBAL_TPM_INT:-0}" -gt 1000 ]; then
+            GLOBAL_TPM_FMT=$(awk "BEGIN {printf \"%.1f\", $GLOBAL_TPM / 1000}")K
+        else
+            GLOBAL_TPM_FMT="${GLOBAL_TPM_INT}"
+        fi
+    fi
+
+    # Build burn display: 🔥 15K↑ (8K) - global (local)
+    if [ "$GLOBAL_TPM_FMT" != "--" ]; then
+        # Color global: green if low, yellow if medium, red if high
+        if [ "${GLOBAL_TPM_INT:-0}" -gt 20000 ]; then
+            GLOBAL_COLOR="$RED"
+        elif [ "${GLOBAL_TPM_INT:-0}" -gt 10000 ]; then
+            GLOBAL_COLOR="$YELLOW"
+        else
+            GLOBAL_COLOR="$GREEN"
+        fi
+        BURN_DISPLAY="🔥 ${GLOBAL_COLOR}${GLOBAL_TPM_FMT}${RESET}${DIM}↑${RESET}"
+        if [ "$LOCAL_TPM_FMT" != "--" ]; then
+            BURN_DISPLAY="${BURN_DISPLAY} ${DIM}(${LOCAL_TPM_FMT})${RESET}"
+        fi
+    elif [ "$LOCAL_TPM_FMT" != "--" ]; then
+        BURN_DISPLAY="🔥 ${MAGENTA}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
     else
         BURN_DISPLAY="🔥 ${DIM}--${RESET}"
     fi

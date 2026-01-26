@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0-beta.2] - 2026-01-26
+
+### Added
+- **Global + Local burn rate display** - Shows `🔥 60K↑ (12K)`
+  - 60K = global burn rate (all sessions combined, from 5h% delta)
+  - 12K = local burn rate (this session only)
+  - Difference shows what other sessions are consuming
+  - Color-coded: green <10K, yellow 10-20K, red >20K t/m
+
 ## [3.1.0-beta.1] - 2026-01-26
 
 ### Added
