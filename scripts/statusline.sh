@@ -1,10 +1,101 @@
 #!/bin/bash
-# Claude Code Statusline v3.0.3
+# Claude Code Statusline v3.1.0-beta.1
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.0.3"
+VERSION="3.1.0-beta.1"
 
 export LC_NUMERIC=C
+
+# === Daemon Mode ===
+# Start with: statusline.sh --daemon
+# Keeps rate limit cache fresh for all sessions
+if [ "$1" = "--daemon" ]; then
+    DAEMON_LOCK="/tmp/claude_statusline_daemon.lock"
+    DAEMON_PID="/tmp/claude_statusline_daemon.pid"
+    DAEMON_LOG="/tmp/claude_statusline_daemon.log"
+
+    # Check if already running
+    if [ -f "$DAEMON_PID" ]; then
+        OLD_PID=$(cat "$DAEMON_PID" 2>/dev/null)
+        if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+            exit 0  # Already running
+        fi
+    fi
+
+    # Daemonize
+    (
+        # Get actual subshell PID (portable - works in all bash/zsh)
+        MY_PID=$(sh -c 'echo $PPID')
+        echo "$MY_PID" > "$DAEMON_PID"
+        trap "rm -f '$DAEMON_LOCK' '$DAEMON_PID'" EXIT
+        touch "$DAEMON_LOCK"
+
+        # Config
+        CACHE_DIR="${CLAUDE_CODE_TMPDIR:-/tmp}"
+        RATE_CACHE="$CACHE_DIR/claude_rate_limit_cache.json"
+        REFRESH_INTERVAL=15
+        IDLE_CHECKS=0
+        MAX_IDLE_CHECKS=4  # Exit after 4 checks (~60s) with no Claude processes
+
+        # OS detection
+        IS_MACOS=false
+        [[ "$OSTYPE" == "darwin"* ]] && IS_MACOS=true
+
+        # Get credentials (same logic as main script)
+        get_creds() {
+            if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+                echo "{\"claudeAiOauth\":{\"accessToken\":\"$CLAUDE_CODE_OAUTH_TOKEN\"}}"
+                return
+            fi
+            if $IS_MACOS; then
+                security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null
+                return
+            fi
+            local CREDS_FILE="$HOME/.claude/.credentials.json"
+            [ -f "$CREDS_FILE" ] && cat "$CREDS_FILE" 2>/dev/null
+        }
+
+        echo "[$(date '+%H:%M:%S')] Daemon started (PID $MY_PID)" >> "$DAEMON_LOG"
+
+        while true; do
+            # Check for Claude processes
+            if pgrep -f "[c]laude" > /dev/null 2>&1; then
+                IDLE_CHECKS=0
+
+                # Refresh rate limit cache
+                CREDS=$(get_creds)
+                TOKEN=$(echo "$CREDS" | jq -r '.claudeAiOauth.accessToken' 2>/dev/null)
+
+                if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
+                    RESULT=$(curl -s --max-time 3 "https://api.anthropic.com/api/oauth/usage" \
+                        -H "Authorization: Bearer $TOKEN" \
+                        -H "anthropic-beta: oauth-2025-04-20" \
+                        -H "Content-Type: application/json" 2>/dev/null)
+
+                    if [ -n "$RESULT" ] && echo "$RESULT" | jq -e '.five_hour' >/dev/null 2>&1; then
+                        TEMP_FILE="${RATE_CACHE}.tmp.$MY_PID"
+                        echo "$RESULT" > "$TEMP_FILE" 2>/dev/null
+                        mv "$TEMP_FILE" "$RATE_CACHE" 2>/dev/null
+                        echo "[$(date '+%H:%M:%S')] Cache refreshed" >> "$DAEMON_LOG"
+                    fi
+                fi
+            else
+                IDLE_CHECKS=$((IDLE_CHECKS + 1))
+                if [ "$IDLE_CHECKS" -ge "$MAX_IDLE_CHECKS" ]; then
+                    echo "[$(date '+%H:%M:%S')] No Claude processes, exiting" >> "$DAEMON_LOG"
+                    exit 0
+                fi
+            fi
+
+            sleep "$REFRESH_INTERVAL"
+        done
+    ) &
+
+    disown 2>/dev/null
+    exit 0
+fi
+
+# === Normal Statusline Mode ===
 input=$(cat)
 
 # === User Configuration ===
