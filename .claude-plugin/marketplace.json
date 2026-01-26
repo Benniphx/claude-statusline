@@ -10,7 +10,7 @@
       "name": "statusline",
       "source": "./",
       "description": "Rich status line showing context window, rate limits, burn rate, and costs",
-      "version": "3.0.2"
+      "version": "3.0.3"
     }
   ]
 }
