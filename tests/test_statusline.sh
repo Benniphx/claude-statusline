@@ -413,6 +413,14 @@ else
     fail "Daemon mode missing" "--daemon and DAEMON_LOCK" "not found"
 fi
 
+# Test 32: Global burn rate display exists
+echo "Test: Global burn rate display exists"
+if grep -q 'GLOBAL_BURN_CACHE' "$STATUSLINE" && grep -q 'GLOBAL_TPM' "$STATUSLINE"; then
+    pass "Global burn rate display present"
+else
+    fail "Global burn rate display missing" "GLOBAL_BURN_CACHE and GLOBAL_TPM" "not found"
+fi
+
 # ============================================
 # Summary
 # ============================================
