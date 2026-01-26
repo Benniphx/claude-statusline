@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2] - 2026-01-26
+
+### Fixed
+- **Initial context display**: No longer shows "0%" or "null" at session start when tokens not yet loaded
+
 ## [3.0.1] - 2026-01-26
 
 ### Added

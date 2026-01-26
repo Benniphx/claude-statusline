@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v3.0.1
+# Claude Code Statusline v3.0.2
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.0.1"
+VERSION="3.0.2"
 
 export LC_NUMERIC=C
 input=$(cat)
@@ -354,9 +354,9 @@ make_bar() {
 }
 
 # Initial context fix: Don't show misleading "0%" at session start
-# If 0% and 0 minutes, data isn't available yet - show "--"
+# Show "--" if no meaningful data yet (0 tokens or very early in session)
 SHOW_CTX_PERCENT=true
-if [ "$PERCENT_USED" -eq 0 ] && [ "$DURATION_MIN" -eq 0 ]; then
+if [ "$TOTAL_TOKENS" -eq 0 ] || ([ "$PERCENT_USED" -eq 0 ] && [ "$DURATION_MIN" -eq 0 ]); then
     SHOW_CTX_PERCENT=false
 fi
 

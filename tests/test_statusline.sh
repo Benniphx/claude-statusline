@@ -388,6 +388,14 @@ else
     fail "Initial context fix missing" "SHOW_CTX_PERCENT logic" "not found"
 fi
 
+# Test 29: TOTAL_TOKENS=0 check for initial context
+echo "Test: TOTAL_TOKENS=0 check for initial context"
+if grep -q 'TOTAL_TOKENS.*-eq 0' "$STATUSLINE" && grep -q 'SHOW_CTX_PERCENT=false' "$STATUSLINE"; then
+    pass "TOTAL_TOKENS=0 check present"
+else
+    fail "TOTAL_TOKENS=0 check missing" "TOTAL_TOKENS -eq 0 check" "not found"
+fi
+
 # ============================================
 # Summary
 # ============================================
