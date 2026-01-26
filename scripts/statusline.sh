@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v3.1.0-beta.3
+# Claude Code Statusline v3.1.0-beta.4
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.1.0-beta.3"
+VERSION="3.1.0-beta.4"
 
 export LC_NUMERIC=C
 
@@ -81,27 +81,30 @@ if [ "$1" = "--daemon" ]; then
                         CURRENT_5H=$(echo "$RESULT" | jq -r '.five_hour.utilization' 2>/dev/null)
                         CURRENT_TS=$(date +%s)
                         BURN_CACHE="$CACHE_DIR/claude_global_burn.json"
+                        TOKENS_PER_MIN=0
 
                         if [ -f "$BURN_CACHE" ]; then
                             PREV_5H=$(jq -r '.five_hour_percent // 0' "$BURN_CACHE" 2>/dev/null)
                             PREV_TS=$(jq -r '.timestamp // 0' "$BURN_CACHE" 2>/dev/null)
+                            PREV_TPM=$(jq -r '.tokens_per_min // 0' "$BURN_CACHE" 2>/dev/null)
 
                             if [ -n "$PREV_5H" ] && [ -n "$PREV_TS" ] && [ "$PREV_TS" -gt 0 ]; then
-                                DELTA_PCT=$(awk "BEGIN {print $CURRENT_5H - $PREV_5H}" 2>/dev/null)
+                                DELTA_PCT=$(awk "BEGIN {printf \"%.1f\", $CURRENT_5H - $PREV_5H}" 2>/dev/null)
                                 DELTA_SECS=$((CURRENT_TS - PREV_TS))
 
-                                # Only calculate if positive delta and reasonable time window
-                                if [ "$DELTA_SECS" -gt 5 ] && [ "$(awk "BEGIN {print ($DELTA_PCT >= 0)}")" = "1" ]; then
-                                    # Convert %/sec to tokens/min (assume 5h limit ~500K tokens)
-                                    # 1% = ~5000 tokens, so %/min * 5000 = tokens/min
+                                if [ "$DELTA_PCT" = "0.0" ] || [ "$DELTA_PCT" = "0" ]; then
+                                    # No change in 5h% = no activity = fast decay
+                                    # Decay by 50% each cycle when idle
+                                    TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.0f\", $PREV_TPM * 0.5}" 2>/dev/null)
+                                elif [ "$DELTA_SECS" -gt 5 ] && [ "$(awk "BEGIN {print ($DELTA_PCT > 0)}")" = "1" ]; then
+                                    # Positive delta = activity
+                                    # Convert %/sec to tokens/min (1% ≈ 5000 tokens)
                                     PCT_PER_MIN=$(awk "BEGIN {printf \"%.4f\", ($DELTA_PCT / $DELTA_SECS) * 60}" 2>/dev/null)
                                     TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.0f\", $PCT_PER_MIN * 5000}" 2>/dev/null)
 
-                                    # Store with smoothing (weighted average with previous)
-                                    PREV_TPM=$(jq -r '.tokens_per_min // 0' "$BURN_CACHE" 2>/dev/null)
-                                    if [ "$PREV_TPM" -gt 0 ] 2>/dev/null; then
-                                        # 70% new, 30% old for smoothing
-                                        TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.0f\", $TOKENS_PER_MIN * 0.7 + $PREV_TPM * 0.3}" 2>/dev/null)
+                                    # Light smoothing only when active (80% new, 20% old)
+                                    if [ "${PREV_TPM:-0}" -gt 0 ] 2>/dev/null; then
+                                        TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.0f\", $TOKENS_PER_MIN * 0.8 + $PREV_TPM * 0.2}" 2>/dev/null)
                                     fi
                                 fi
                             fi
@@ -867,43 +870,35 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     fi
 
-    # Build burn display
-    # If global >> local (>1.3x), show split: 🔥 60K↑ (12K) - indicates other sessions active
-    # If global ≈ local (within 30%), show simple: 🔥 12K t/m - single session
+    # Build burn display - always show local rate (accurate), add indicator if other sessions active
+    # Global burn rate from 5h% is too coarse (batched API updates), so we only use it as activity indicator
     LOCAL_TPM_INT=${TOKENS_PER_MIN%.*}
     LOCAL_TPM_INT=${LOCAL_TPM_INT:-0}
-    SHOW_SPLIT=false
-    if [ "$GLOBAL_TPM_FMT" != "--" ] && [ "${GLOBAL_TPM_INT:-0}" -gt 100 ]; then
-        if [ "${LOCAL_TPM_INT:-0}" -gt 0 ]; then
-            # Check if global is significantly higher than local (>1.3x = other sessions active)
-            RATIO=$(awk "BEGIN {printf \"%.2f\", ${GLOBAL_TPM_INT:-0} / ${LOCAL_TPM_INT:-1}}" 2>/dev/null)
-            if [ "$(awk "BEGIN {print ($RATIO > 1.3)}")" = "1" ]; then
-                SHOW_SPLIT=true
-            fi
-        else
-            # No local activity but global exists = definitely other sessions
-            SHOW_SPLIT=true
+
+    # Check if there's significant other activity (global > local + 5000)
+    OTHER_ACTIVITY=false
+    # Ensure LOCAL_TPM_INT is numeric (default to 0 if --)
+    [[ "$LOCAL_TPM_INT" =~ ^[0-9]+$ ]] || LOCAL_TPM_INT=0
+    if [ "${GLOBAL_TPM_INT:-0}" -gt 0 ] && [ "$LOCAL_TPM_INT" -gt 0 ]; then
+        DIFF=$((GLOBAL_TPM_INT - LOCAL_TPM_INT))
+        if [ "$DIFF" -gt 5000 ]; then
+            OTHER_ACTIVITY=true
         fi
+    elif [ "${GLOBAL_TPM_INT:-0}" -gt 5000 ] && [ "$LOCAL_TPM_INT" -eq 0 ]; then
+        # No local activity but significant global = other sessions
+        OTHER_ACTIVITY=true
     fi
 
-    if [ "$SHOW_SPLIT" = true ]; then
-        # Color global: green if low, yellow if medium, red if high
-        if [ "${GLOBAL_TPM_INT:-0}" -gt 20000 ]; then
-            GLOBAL_COLOR="$RED"
-        elif [ "${GLOBAL_TPM_INT:-0}" -gt 10000 ]; then
-            GLOBAL_COLOR="$YELLOW"
+    if [ "$LOCAL_TPM_FMT" != "--" ]; then
+        if [ "$OTHER_ACTIVITY" = true ]; then
+            # Show local rate with "others active" indicator
+            BURN_DISPLAY="🔥 ${MAGENTA}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET} ${YELLOW}⚡${RESET}"
         else
-            GLOBAL_COLOR="$GREEN"
+            BURN_DISPLAY="🔥 ${MAGENTA}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
         fi
-        BURN_DISPLAY="🔥 ${GLOBAL_COLOR}${GLOBAL_TPM_FMT}${RESET}${DIM}↑${RESET}"
-        if [ "$LOCAL_TPM_FMT" != "--" ]; then
-            BURN_DISPLAY="${BURN_DISPLAY} ${DIM}(${LOCAL_TPM_FMT})${RESET}"
-        fi
-    elif [ "$LOCAL_TPM_FMT" != "--" ]; then
-        BURN_DISPLAY="🔥 ${MAGENTA}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
-    elif [ "$GLOBAL_TPM_FMT" != "--" ]; then
-        # Only global available (session just started)
-        BURN_DISPLAY="🔥 ${MAGENTA}${GLOBAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
+    elif [ "$OTHER_ACTIVITY" = true ]; then
+        # No local activity but others are active
+        BURN_DISPLAY="🔥 ${DIM}--${RESET} ${YELLOW}⚡${RESET}"
     else
         BURN_DISPLAY="🔥 ${DIM}--${RESET}"
     fi

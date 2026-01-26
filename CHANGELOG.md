@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0-beta.4] - 2026-01-26
+
+### Changed
+- **Simplified burn rate display** - Shows local rate + activity indicator
+  - `🔥 12K t/m` - normal (this session's burn rate)
+  - `🔥 12K t/m ⚡` - other sessions actively consuming tokens
+  - `🔥 -- ⚡` - this session idle, but others are active
+  - Yellow ⚡ appears when global burn > local + 5K t/m
+- **Faster global burn decay** - 50% decay per cycle when idle (was 30%)
+- Removed complex global/local split display (5h% API too coarse for accurate global rate)
+
 ## [3.1.0-beta.3] - 2026-01-26
 
 ### Changed
