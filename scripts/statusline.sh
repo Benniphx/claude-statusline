@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v3.1.0-beta.2
+# Claude Code Statusline v3.1.0-beta.3
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.1.0-beta.2"
+VERSION="3.1.0-beta.3"
 
 export LC_NUMERIC=C
 
@@ -867,8 +867,26 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     fi
 
-    # Build burn display: 🔥 15K↑ (8K) - global (local)
-    if [ "$GLOBAL_TPM_FMT" != "--" ]; then
+    # Build burn display
+    # If global >> local (>1.3x), show split: 🔥 60K↑ (12K) - indicates other sessions active
+    # If global ≈ local (within 30%), show simple: 🔥 12K t/m - single session
+    LOCAL_TPM_INT=${TOKENS_PER_MIN%.*}
+    LOCAL_TPM_INT=${LOCAL_TPM_INT:-0}
+    SHOW_SPLIT=false
+    if [ "$GLOBAL_TPM_FMT" != "--" ] && [ "${GLOBAL_TPM_INT:-0}" -gt 100 ]; then
+        if [ "${LOCAL_TPM_INT:-0}" -gt 0 ]; then
+            # Check if global is significantly higher than local (>1.3x = other sessions active)
+            RATIO=$(awk "BEGIN {printf \"%.2f\", ${GLOBAL_TPM_INT:-0} / ${LOCAL_TPM_INT:-1}}" 2>/dev/null)
+            if [ "$(awk "BEGIN {print ($RATIO > 1.3)}")" = "1" ]; then
+                SHOW_SPLIT=true
+            fi
+        else
+            # No local activity but global exists = definitely other sessions
+            SHOW_SPLIT=true
+        fi
+    fi
+
+    if [ "$SHOW_SPLIT" = true ]; then
         # Color global: green if low, yellow if medium, red if high
         if [ "${GLOBAL_TPM_INT:-0}" -gt 20000 ]; then
             GLOBAL_COLOR="$RED"
@@ -883,6 +901,9 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     elif [ "$LOCAL_TPM_FMT" != "--" ]; then
         BURN_DISPLAY="🔥 ${MAGENTA}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
+    elif [ "$GLOBAL_TPM_FMT" != "--" ]; then
+        # Only global available (session just started)
+        BURN_DISPLAY="🔥 ${MAGENTA}${GLOBAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
     else
         BURN_DISPLAY="🔥 ${DIM}--${RESET}"
     fi
