@@ -329,6 +329,66 @@ fi
 rm -rf "$TEST_DIR"
 
 # ============================================
+# v3.0 Feature Tests
+# ============================================
+
+# Test 22: Pace indicator logic exists
+echo "Test: Pace indicator logic exists"
+if grep -q 'PACE_DISPLAY' "$STATUSLINE" && grep -q 'PACE_COLOR' "$STATUSLINE"; then
+    pass "Pace indicator logic present"
+else
+    fail "Pace indicator missing" "PACE_DISPLAY and PACE_COLOR" "not found"
+fi
+
+# Test 23: Work days configuration exists
+echo "Test: Work days configuration exists"
+if grep -q 'WORK_DAYS_PER_WEEK' "$STATUSLINE"; then
+    pass "Work days configuration present"
+else
+    fail "Work days config missing" "WORK_DAYS_PER_WEEK" "not found"
+fi
+
+# Test 24: Atomic cache function exists
+echo "Test: Atomic cache writes"
+if grep -q 'fetch_rate_limits_atomic' "$STATUSLINE" && grep -q '\.tmp\.' "$STATUSLINE"; then
+    pass "Atomic cache function present"
+else
+    fail "Atomic cache missing" "fetch_rate_limits_atomic with .tmp" "not found"
+fi
+
+# Test 25: Burn rate display exists
+echo "Test: Burn rate display exists"
+if grep -q 'BURN_DISPLAY' "$STATUSLINE" && grep -q '🔥' "$STATUSLINE"; then
+    pass "Burn rate display present"
+else
+    fail "Burn rate display missing" "BURN_DISPLAY with 🔥" "not found"
+fi
+
+# Test 26: Cache TTL configuration exists
+echo "Test: Cache TTL configuration exists"
+if grep -q 'RATE_CACHE_TTL' "$STATUSLINE"; then
+    pass "Cache TTL configuration present"
+else
+    fail "Cache TTL config missing" "RATE_CACHE_TTL" "not found"
+fi
+
+# Test 27: 7d pace calculation exists
+echo "Test: 7d pace calculation exists"
+if grep -q 'SEVEN_DAY_PACE' "$STATUSLINE" && grep -q 'CALENDAR_DAYS_ELAPSED' "$STATUSLINE"; then
+    pass "7d pace calculation present"
+else
+    fail "7d pace calculation missing" "SEVEN_DAY_PACE calculation" "not found"
+fi
+
+# Test 28: Initial context fix exists
+echo "Test: Initial context fix exists"
+if grep -q 'SHOW_CTX_PERCENT' "$STATUSLINE" && grep -q 'CTX_PERCENT_DISPLAY' "$STATUSLINE"; then
+    pass "Initial context fix present"
+else
+    fail "Initial context fix missing" "SHOW_CTX_PERCENT logic" "not found"
+fi
+
+# ============================================
 # Summary
 # ============================================
 

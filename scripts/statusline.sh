@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v3.0.0
+# Claude Code Statusline v3.0.1
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.0.0"
+VERSION="3.0.1"
 
 export LC_NUMERIC=C
 input=$(cat)
@@ -708,8 +708,21 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
         fi
     fi
 
+    # Burn rate display (tokens/min)
+    if [ "$TOKENS_PER_MIN" != "--" ]; then
+        TPM_INT=${TOKENS_PER_MIN%.*}
+        if [ "${TPM_INT:-0}" -gt 1000 ]; then
+            TPM_FMT=$(awk "BEGIN {printf \"%.1f\", $TOKENS_PER_MIN / 1000}")K
+        else
+            TPM_FMT="${TOKENS_PER_MIN}"
+        fi
+        BURN_DISPLAY="🔥 ${MAGENTA}${TPM_FMT}${RESET} ${DIM}t/m${RESET}"
+    else
+        BURN_DISPLAY="🔥 ${DIM}--${RESET}"
+    fi
+
     # OUTPUT: Subscription
-    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${CTX_PERCENT_DISPLAY}${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
+    echo -e "${CTX_COLOR}${MODEL}${RESET}  ${DIM}│${RESET}  Ctx: ${CTX_BAR} ${CTX_COLOR}${CTX_PERCENT_DISPLAY}${RESET}${CONTEXT_WARNING} ${DIM}(${TOKENS_FMT}/${MAX_FMT})${RESET}  ${DIM}│${RESET}  5h: ${RATE_5H_BAR} ${RATE_DISPLAY}  ${DIM}│${RESET}  ${BURN_DISPLAY}  ${DIM}│${RESET}  7d: ${RATE_7D_BAR} ${SEVEN_DAY_DISPLAY}  ${DIM}│${RESET}  ${DIM}${DURATION_MIN}m${RESET}${LINES_INFO}${UPDATE_NOTICE}"
 
 else
     # ==========================================

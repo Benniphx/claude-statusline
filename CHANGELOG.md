@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2026-01-26
+
+### Added
+- **Burn rate display** back between 5h and 7d: `🔥 12.5K t/m`
+
 ## [3.0.0] - 2026-01-26
 
 ### Added
