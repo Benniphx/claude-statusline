@@ -1,6 +1,7 @@
 # Claude Code Statusline
 
-![Version](https://img.shields.io/badge/version-3.1.0--beta.4-blue)
+![Stable](https://img.shields.io/badge/stable-v3.0.4-blue)
+![Beta](https://img.shields.io/badge/beta-v3.1.0--beta.5-orange)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -176,6 +177,27 @@ Run `/statusline:config` in Claude Code to check:
 | macOS | Keychain (`Claude Code-credentials`) |
 | Linux | `~/.claude/.credentials.json` |
 | Override | `$CLAUDE_CODE_OAUTH_TOKEN` env var |
+
+---
+
+## Beta Testing
+
+Want to try new features before they're stable? Install the beta version:
+
+```bash
+# Install specific beta version
+claude plugins install Benniphx/claude-statusline@v3.1.0-beta.5
+
+# Or install latest from main (includes unreleased changes)
+claude plugins install Benniphx/claude-statusline@main
+```
+
+**Current Beta (v3.1.0-beta.5):**
+- Cross-session burn rate tracking
+- Background daemon for sync
+- XDG config path support (`~/.config/claude-statusline/config`)
+
+**Feedback:** [Open an issue](https://github.com/Benniphx/claude-statusline/issues) with `[beta]` in the title.
 
 ---
 

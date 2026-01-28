@@ -79,13 +79,41 @@ echo "Test: Version consistency across all files"
 V_SCRIPT=$(grep -o 'VERSION="[^"]*"' "$STATUSLINE" | cut -d'"' -f2)
 V_PLUGIN=$(jq -r '.version' "$PROJECT_ROOT/.claude-plugin/plugin.json")
 V_MARKET=$(jq -r '.plugins[0].version' "$PROJECT_ROOT/.claude-plugin/marketplace.json")
-V_README=$(grep -o 'version-[0-9a-z.\-]*-blue' "$PROJECT_ROOT/README.md" | sed 's/version-//;s/-blue//' | sed 's/--/-/')
 V_CHANGELOG=$(grep -o '## \[[0-9a-z.\-]*\]' "$PROJECT_ROOT/CHANGELOG.md" | head -1 | tr -d '[]# ')
 
-if [ "$V_SCRIPT" = "$V_PLUGIN" ] && [ "$V_PLUGIN" = "$V_MARKET" ] && [ "$V_MARKET" = "$V_README" ] && [ "$V_README" = "$V_CHANGELOG" ]; then
-    pass "All versions match: $V_SCRIPT"
+# README has separate stable and beta badges
+V_README_STABLE=$(grep -o 'stable-v[0-9.]*-blue' "$PROJECT_ROOT/README.md" | sed 's/stable-v//;s/-blue//')
+V_README_BETA=$(grep -o 'beta-v[0-9a-z.\-]*-orange' "$PROJECT_ROOT/README.md" | sed 's/beta-v//;s/-orange//' | sed 's/--/-/')
+
+# Script/plugin/marketplace should match (current dev version)
+if [ "$V_SCRIPT" = "$V_PLUGIN" ] && [ "$V_PLUGIN" = "$V_MARKET" ]; then
+    pass "Script/plugin/marketplace versions match: $V_SCRIPT"
 else
-    fail "Version mismatch!" "all same" "script=$V_SCRIPT, plugin=$V_PLUGIN, marketplace=$V_MARKET, README=$V_README, CHANGELOG=$V_CHANGELOG"
+    fail "Version mismatch in code!" "all same" "script=$V_SCRIPT, plugin=$V_PLUGIN, marketplace=$V_MARKET"
+fi
+
+# Test 2b: README beta badge matches current version
+echo "Test: README beta badge matches current version"
+if [ "$V_README_BETA" = "$V_SCRIPT" ]; then
+    pass "README beta badge matches: $V_README_BETA"
+else
+    fail "README beta badge outdated!" "$V_SCRIPT" "README shows $V_README_BETA"
+fi
+
+# Test 2c: CHANGELOG latest entry matches current version
+echo "Test: CHANGELOG matches current version"
+if [ "$V_CHANGELOG" = "$V_SCRIPT" ]; then
+    pass "CHANGELOG matches: $V_CHANGELOG"
+else
+    fail "CHANGELOG outdated!" "$V_SCRIPT" "CHANGELOG shows $V_CHANGELOG"
+fi
+
+# Test 2d: README stable badge is documented (informational)
+echo "Test: README stable badge present"
+if [ -n "$V_README_STABLE" ]; then
+    pass "README stable version: $V_README_STABLE"
+else
+    fail "README missing stable badge" "vX.Y.Z" "not found"
 fi
 
 # Test 3: Cross-platform helpers exist
