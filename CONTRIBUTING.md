@@ -48,6 +48,16 @@ gh release edit v2.0.X --draft=false
 
 ## Development
 
+### Initial Setup
+
+After cloning, install git hooks:
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+This installs a **pre-push hook** that runs tests automatically before every push. Failed tests = push blocked.
+
 ### Running Tests
 
 ```bash
