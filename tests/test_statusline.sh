@@ -450,6 +450,78 @@ else
 fi
 
 # ============================================
+# Release Workflow Tests
+# ============================================
+
+# Test 33: Release type detection (prerelease vs stable)
+echo "Test: Release type detection"
+is_prerelease() {
+    local tag="$1"
+    [[ "$tag" == *"-beta"* ]] || [[ "$tag" == *"-alpha"* ]] || [[ "$tag" == *"-rc"* ]]
+}
+
+RELEASE_TYPE_PASS=true
+# Beta tags should be prerelease
+if ! is_prerelease "v3.1.0-beta.5"; then RELEASE_TYPE_PASS=false; fi
+if ! is_prerelease "v1.0.0-alpha.1"; then RELEASE_TYPE_PASS=false; fi
+if ! is_prerelease "v2.0.0-rc.1"; then RELEASE_TYPE_PASS=false; fi
+# Stable tags should NOT be prerelease
+if is_prerelease "v3.0.4"; then RELEASE_TYPE_PASS=false; fi
+if is_prerelease "v1.0.0"; then RELEASE_TYPE_PASS=false; fi
+if is_prerelease "v2.5.10"; then RELEASE_TYPE_PASS=false; fi
+
+if [ "$RELEASE_TYPE_PASS" = true ]; then
+    pass "Release type detection works correctly"
+else
+    fail "Release type detection broken" "correct prerelease detection" "wrong results"
+fi
+
+# Test 34: Changelog extraction
+echo "Test: Changelog extraction for release notes"
+extract_changelog() {
+    local version="$1"
+    awk -v ver="$version" '
+        /^## \[/ {
+            if (found) exit
+            if (index($0, ver)) found=1
+            next
+        }
+        found {print}
+    ' "$PROJECT_ROOT/CHANGELOG.md"
+}
+
+# Test extraction for current beta version
+NOTES=$(extract_changelog "3.1.0-beta.5")
+if echo "$NOTES" | grep -q "XDG config path"; then
+    pass "Changelog extraction finds release notes"
+else
+    fail "Changelog extraction failed" "XDG config path in notes" "not found"
+fi
+
+# Test 35: Changelog extraction returns empty for non-existent version
+echo "Test: Changelog extraction fallback for missing version"
+NOTES=$(extract_changelog "99.99.99")
+if [ -z "$NOTES" ]; then
+    pass "Changelog extraction returns empty for missing version"
+else
+    fail "Should return empty for missing version" "empty" "$NOTES"
+fi
+
+# Test 36: Release workflow file exists and has correct structure
+echo "Test: Release workflow file structure"
+RELEASE_WF="$PROJECT_ROOT/.github/workflows/release.yml"
+if [ -f "$RELEASE_WF" ] && \
+   grep -q "on:" "$RELEASE_WF" && \
+   grep -q "push:" "$RELEASE_WF" && \
+   grep -q "tags:" "$RELEASE_WF" && \
+   grep -q "v\*" "$RELEASE_WF" && \
+   grep -q "gh release create" "$RELEASE_WF"; then
+    pass "Release workflow has correct structure"
+else
+    fail "Release workflow missing or incomplete" "trigger + gh release create" "not found"
+fi
+
+# ============================================
 # Summary
 # ============================================
 
