@@ -1,8 +1,8 @@
 #!/bin/bash
-# Claude Code Statusline v3.1.0-beta.4
+# Claude Code Statusline v3.1.0-beta.5
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.1.0-beta.4"
+VERSION="3.1.0-beta.5"
 
 export LC_NUMERIC=C
 
