@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0-beta.5] - 2026-01-28
+
+### Added
+- **XDG config path support** - Config now at `~/.config/claude-statusline/config`
+  - Falls back to `~/.claude-statusline.conf` for existing users
+  - Contributed by @omarkohl (#3)
+
+## [3.0.4] - 2026-01-28
+
+### Added
+- **XDG config path support** - Same as beta.5, backported to stable
+
 ## [3.1.0-beta.4] - 2026-01-26
 
 ### Changed
