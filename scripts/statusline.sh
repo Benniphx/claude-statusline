@@ -141,18 +141,26 @@ fi
 input=$(cat)
 
 # === User Configuration ===
-# Config file: ~/.claude-statusline.conf
+# Config file locations (in order of priority):
+#   1. $XDG_CONFIG_HOME/claude-statusline/config (or ~/.config/claude-statusline/config)
+#   2. ~/.claude-statusline.conf (legacy fallback)
 # Example content:
 #   CONTEXT_WARNING_THRESHOLD=75
 #   RATE_CACHE_TTL=30
 #   WORK_DAYS_PER_WEEK=5
 #
-CONFIG_FILE="$HOME/.claude-statusline.conf"
+XDG_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-statusline"
+CONFIG_FILE=""
+if [ -f "$XDG_CONFIG_DIR/config" ]; then
+    CONFIG_FILE="$XDG_CONFIG_DIR/config"
+elif [ -f "$HOME/.claude-statusline.conf" ]; then
+    CONFIG_FILE="$HOME/.claude-statusline.conf"
+fi
 CONTEXT_WARNING_THRESHOLD=""  # Empty = disabled (uses default color scheme)
 RATE_CACHE_TTL=15             # Seconds between API refreshes (10-120)
 WORK_DAYS_PER_WEEK=5          # 5 = Mon-Fri, 7 = all days (for 7d pace calculation)
 
-if [ -f "$CONFIG_FILE" ]; then
+if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
     # Source config file (only specific variables for security)
     while IFS='=' read -r key value; do
         key=$(echo "$key" | tr -d '[:space:]')

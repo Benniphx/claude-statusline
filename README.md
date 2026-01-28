@@ -99,9 +99,11 @@ The **pace indicator** (`1.3x`) shows how fast you're consuming your limit compa
 
 ## Configuration
 
-Create `~/.claude-statusline.conf`:
+Create `~/.config/claude-statusline/config`:
 
 ```bash
+mkdir -p ~/.config/claude-statusline
+cat > ~/.config/claude-statusline/config << 'EOF'
 # ─────────────────────────────────────────────────────────
 # Context Warning Threshold
 # ─────────────────────────────────────────────────────────
@@ -126,6 +128,7 @@ RATE_CACHE_TTL=15
 # 7 = All days (if you work weekends)
 # Range: 1-7, Default: 5
 WORK_DAYS_PER_WEEK=5
+EOF
 ```
 
 ---
