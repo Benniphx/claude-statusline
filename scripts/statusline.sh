@@ -2,7 +2,7 @@
 # Claude Code Statusline v3.1.0-beta.5
 # https://github.com/Benniphx/claude-statusline
 # Cross-platform support: macOS + Linux/WSL
-VERSION="3.1.0-beta.5"
+VERSION="3.1.0"
 
 export LC_NUMERIC=C
 
@@ -148,6 +148,7 @@ input=$(cat)
 #   CONTEXT_WARNING_THRESHOLD=75
 #   RATE_CACHE_TTL=30
 #   WORK_DAYS_PER_WEEK=5
+#   ENABLE_DAEMON=true
 #
 XDG_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-statusline"
 CONFIG_FILE=""
@@ -397,12 +398,177 @@ if [ -n "$HAS_OAUTH" ] && [ "$HAS_OAUTH" != "null" ]; then
 fi
 
 # === Extract Data ===
-CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
-MODEL=$(echo "$input" | jq -r '.model.display_name // "Claude"')
+# Validate input is present - show cached rate limits if no input
+if [ -z "$input" ]; then
+    # Try to show cached rate limit data instead of empty
+    CACHE_DIR="${CLAUDE_CODE_TMPDIR:-/tmp}"
+    RATE_CACHE="$CACHE_DIR/claude_rate_limit_cache.json"
+    if [ -f "$RATE_CACHE" ]; then
+        CACHED_5H=$(jq -r '.five_hour.utilization // empty' "$RATE_CACHE" 2>/dev/null)
+        if [ -n "$CACHED_5H" ]; then
+            CACHED_5H_INT=${CACHED_5H%.*}
+            echo -e "\033[2mStarting...\033[0m  \033[2m│\033[0m  5h: \033[32m${CACHED_5H_INT:-0}%\033[0m"
+            exit 0
+        fi
+    fi
+    echo -e "\033[2mStarting...\033[0m"
+    exit 0
+fi
+
+CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 0')
+MODEL_RAW=$(echo "$input" | jq -r '.model.display_name // "Claude"')
+MODEL_ID=$(echo "$input" | jq -r '.model.model_id // ""' 2>/dev/null)
 COST=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
 DURATION_MS=$(echo "$input" | jq -r '.cost.total_duration_ms // 0')
 LINES_ADDED=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
 LINES_REMOVED=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
+
+# Sanitize numeric values (ensure they're integers, default to 0)
+# Default context size depends on model type (will be set after model detection)
+CONTEXT_SIZE=${CONTEXT_SIZE:-0}
+[[ "$CONTEXT_SIZE" =~ ^[0-9]+$ ]] || CONTEXT_SIZE=0
+COST=${COST:-0}
+DURATION_MS=${DURATION_MS:-0}
+[[ "$DURATION_MS" =~ ^[0-9]+$ ]] || DURATION_MS=0
+LINES_ADDED=${LINES_ADDED:-0}
+[[ "$LINES_ADDED" =~ ^[0-9]+$ ]] || LINES_ADDED=0
+LINES_REMOVED=${LINES_REMOVED:-0}
+[[ "$LINES_REMOVED" =~ ^[0-9]+$ ]] || LINES_REMOVED=0
+
+# === Model Display Enhancement ===
+# Map model IDs to short display names
+MODEL="$MODEL_RAW"
+IS_LOCAL_MODEL=false
+
+case "$MODEL_ID" in
+    # Claude models
+    claude-opus-4-5-20251101|*opus-4-5*|*opus-4.5*)
+        MODEL="Opus 4.5"
+        ;;
+    claude-sonnet-4-20250514|*sonnet-4-2025*|*sonnet-4*)
+        MODEL="Sonnet 4"
+        ;;
+    claude-3-5-sonnet*|*sonnet-3.5*|*sonnet-3-5*)
+        MODEL="Sonnet 3.5"
+        ;;
+    claude-3-opus*|*opus-3*)
+        MODEL="Opus 3"
+        ;;
+    claude-3-5-haiku*|*haiku-3.5*|*haiku-3-5*)
+        MODEL="Haiku 3.5"
+        ;;
+    claude-3-haiku*|*haiku-3*)
+        MODEL="Haiku 3"
+        ;;
+    # Ollama/Local models - format: "ollama:model" or just model name
+    ollama:*|ollama/*)
+        IS_LOCAL_MODEL=true
+        # Extract model name after ollama: prefix
+        LOCAL_MODEL="${MODEL_ID#ollama:}"
+        LOCAL_MODEL="${LOCAL_MODEL#ollama/}"
+        # Shorten common Ollama model names
+        case "$LOCAL_MODEL" in
+            qwen3-coder*) MODEL="🦙 Qwen3" ;;
+            qwen2.5-coder*) MODEL="🦙 Qwen2.5" ;;
+            llama3*) MODEL="🦙 Llama3" ;;
+            llama2*) MODEL="🦙 Llama2" ;;
+            codellama*) MODEL="🦙 CodeLlama" ;;
+            mistral*) MODEL="🦙 Mistral" ;;
+            deepseek*) MODEL="🦙 DeepSeek" ;;
+            phi*) MODEL="🦙 Phi" ;;
+            *)
+                # Generic: show first part of model name
+                SHORT_NAME=$(echo "$LOCAL_MODEL" | cut -d: -f1 | cut -d- -f1)
+                MODEL="🦙 ${SHORT_NAME^}"  # Capitalize first letter
+                ;;
+        esac
+        ;;
+    # Other local models (generic detection)
+    *local*|*localhost*)
+        IS_LOCAL_MODEL=true
+        MODEL="🦙 Local"
+        ;;
+    *)
+        # Fallback: shorten common patterns
+        if [[ "$MODEL_RAW" == *"Opus"* ]]; then
+            MODEL=$(echo "$MODEL_RAW" | sed 's/Claude //' | sed 's/ (.*)//')
+        elif [[ "$MODEL_RAW" == *"Sonnet"* ]]; then
+            MODEL=$(echo "$MODEL_RAW" | sed 's/Claude //' | sed 's/ (.*)//')
+        elif [[ "$MODEL_RAW" == *"Haiku"* ]]; then
+            MODEL=$(echo "$MODEL_RAW" | sed 's/Claude //' | sed 's/ (.*)//')
+        elif [[ "$MODEL_RAW" == *"ollama"* ]] || [[ "$MODEL_RAW" == *"Ollama"* ]]; then
+            IS_LOCAL_MODEL=true
+            MODEL="🦙 Ollama"
+        fi
+        ;;
+esac
+
+# Set default context size based on model type (if not provided by API)
+if [ "$CONTEXT_SIZE" -eq 0 ]; then
+    if [ "$IS_LOCAL_MODEL" = true ]; then
+        # Try to get actual context size from Ollama
+        if [ -n "$LOCAL_MODEL" ]; then
+            # Sanitize model name for cache filename
+            CACHE_MODEL_NAME=$(echo "$LOCAL_MODEL" | tr -cd '[:alnum:]-_')
+            OLLAMA_CTX_CACHE="$CACHE_DIR/ollama_ctx_${CACHE_MODEL_NAME}.txt"
+
+            # Check cache first (valid for 30s - short because running config can change)
+            if [ -f "$OLLAMA_CTX_CACHE" ]; then
+                CACHE_AGE=$(( $(date +%s) - $(get_file_mtime "$OLLAMA_CTX_CACHE") ))
+                if [ "$CACHE_AGE" -lt 30 ]; then
+                    CACHED_CTX=$(cat "$OLLAMA_CTX_CACHE" 2>/dev/null)
+                    if [[ "$CACHED_CTX" =~ ^[0-9]+$ ]]; then
+                        CONTEXT_SIZE="$CACHED_CTX"
+                    fi
+                fi
+            fi
+
+            # Query Ollama API if no valid cache
+            if [ "$CONTEXT_SIZE" -eq 0 ]; then
+                # Method 1: Check /api/ps for RUNNING model (shows actual configured context)
+                # This is the most accurate - shows what's actually being used
+                OLLAMA_PS=$(curl -s --max-time 1 "http://localhost:11434/api/ps" 2>/dev/null)
+                if [ -n "$OLLAMA_PS" ]; then
+                    # Find our model in the running list and get its context_length
+                    OLLAMA_CTX=$(echo "$OLLAMA_PS" | jq -r --arg model "$LOCAL_MODEL" \
+                        '.models[] | select(.name == $model or .model == $model) | .context_length // empty' 2>/dev/null)
+                fi
+
+                # Method 2: If not running, use /api/show (shows max capacity)
+                if [ -z "$OLLAMA_CTX" ] || ! [[ "$OLLAMA_CTX" =~ ^[0-9]+$ ]]; then
+                    OLLAMA_SHOW=$(curl -s --max-time 1 "http://localhost:11434/api/show" \
+                        -d "{\"name\":\"$LOCAL_MODEL\"}" 2>/dev/null)
+                    if [ -n "$OLLAMA_SHOW" ]; then
+                        # Try model_info first (more reliable), then grep from text output
+                        OLLAMA_CTX=$(echo "$OLLAMA_SHOW" | jq -r '
+                            .model_info["qwen3moe.context_length"] //
+                            .model_info["llama.context_length"] //
+                            .model_info["gemma.context_length"] //
+                            .model_info["mistral.context_length"] //
+                            .model_info["phi.context_length"] //
+                            empty' 2>/dev/null)
+                    fi
+
+                    # Fallback to CLI if API didn't work
+                    if [ -z "$OLLAMA_CTX" ] && command -v ollama &>/dev/null; then
+                        OLLAMA_CTX=$(ollama show "$LOCAL_MODEL" 2>/dev/null | grep -i "context length" | awk '{print $3}')
+                    fi
+                fi
+
+                # Cache and use the result
+                if [[ "$OLLAMA_CTX" =~ ^[0-9]+$ ]] && [ "$OLLAMA_CTX" -gt 0 ]; then
+                    CONTEXT_SIZE="$OLLAMA_CTX"
+                    echo "$OLLAMA_CTX" > "$OLLAMA_CTX_CACHE" 2>/dev/null
+                fi
+            fi
+        fi
+
+        # Final fallback if nothing worked
+        [ "$CONTEXT_SIZE" -eq 0 ] && CONTEXT_SIZE=32768
+    else
+        CONTEXT_SIZE=200000  # Claude default
+    fi
+fi
 
 # Context tokens: use current_usage (actual context) not cumulative totals
 # current_usage contains the actual tokens in the context window
@@ -410,15 +576,29 @@ CURRENT_INPUT=$(echo "$input" | jq -r '.context_window.current_usage.input_token
 CACHE_CREATE=$(echo "$input" | jq -r '.context_window.current_usage.cache_creation_input_tokens // 0' 2>/dev/null)
 CACHE_READ=$(echo "$input" | jq -r '.context_window.current_usage.cache_read_input_tokens // 0' 2>/dev/null)
 
-if [ -n "$CURRENT_INPUT" ] && [ "$CURRENT_INPUT" != "null" ]; then
+# Sanitize cache values
+CACHE_CREATE=${CACHE_CREATE:-0}
+[[ "$CACHE_CREATE" =~ ^[0-9]+$ ]] || CACHE_CREATE=0
+CACHE_READ=${CACHE_READ:-0}
+[[ "$CACHE_READ" =~ ^[0-9]+$ ]] || CACHE_READ=0
+
+if [ -n "$CURRENT_INPUT" ] && [ "$CURRENT_INPUT" != "null" ] && [[ "$CURRENT_INPUT" =~ ^[0-9]+$ ]]; then
     # Use current_usage for accurate context window display
     TOTAL_TOKENS=$((CURRENT_INPUT + CACHE_CREATE + CACHE_READ))
 else
     # Fallback to cumulative (old behavior) if current_usage not available
     INPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
     OUTPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
+    INPUT_TOKENS=${INPUT_TOKENS:-0}
+    [[ "$INPUT_TOKENS" =~ ^[0-9]+$ ]] || INPUT_TOKENS=0
+    OUTPUT_TOKENS=${OUTPUT_TOKENS:-0}
+    [[ "$OUTPUT_TOKENS" =~ ^[0-9]+$ ]] || OUTPUT_TOKENS=0
     TOTAL_TOKENS=$((INPUT_TOKENS + OUTPUT_TOKENS))
 fi
+
+# Ensure TOTAL_TOKENS is valid
+TOTAL_TOKENS=${TOTAL_TOKENS:-0}
+[[ "$TOTAL_TOKENS" =~ ^[0-9]+$ ]] || TOTAL_TOKENS=0
 
 # === Calculations ===
 # Cap tokens at context size for display

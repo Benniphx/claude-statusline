@@ -92,9 +92,12 @@ else
     fail "Version mismatch in code!" "all same" "script=$V_SCRIPT, plugin=$V_PLUGIN, marketplace=$V_MARKET"
 fi
 
-# Test 2b: README beta badge matches current version
+# Test 2b: README beta badge matches current version (if beta exists)
 echo "Test: README beta badge matches current version"
-if [ "$V_README_BETA" = "$V_SCRIPT" ]; then
+if [ -z "$V_README_BETA" ]; then
+    # No beta badge = stable release, that's fine
+    pass "No beta badge (stable release)"
+elif [ "$V_README_BETA" = "$V_SCRIPT" ]; then
     pass "README beta badge matches: $V_README_BETA"
 else
     fail "README beta badge outdated!" "$V_SCRIPT" "README shows $V_README_BETA"
