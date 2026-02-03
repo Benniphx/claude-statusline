@@ -1,7 +1,6 @@
 # Claude Code Statusline
 
-![Stable](https://img.shields.io/badge/stable-v3.0.4-blue)
-![Beta](https://img.shields.io/badge/beta-v3.1.0--beta.5-orange)
+![Stable](https://img.shields.io/badge/stable-v3.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -129,8 +128,96 @@ RATE_CACHE_TTL=15
 # 7 = All days (if you work weekends)
 # Range: 1-7, Default: 5
 WORK_DAYS_PER_WEEK=5
+
+# ─────────────────────────────────────────────────────────
+# Background Daemon (opt-in)
+# ─────────────────────────────────────────────────────────
+# Keeps rate limit cache fresh in the background
+# Useful if you have multiple Claude sessions open
+# Starts automatically on session start, stops when idle
+# Default: false (disabled)
+ENABLE_DAEMON=true
 EOF
 ```
+
+---
+
+## Background Daemon (Details)
+
+The optional background daemon keeps your rate limit cache fresh across all Claude sessions. Here's exactly what it does:
+
+### What the Daemon Does
+
+1. **Refreshes rate limit data** every 15 seconds from the Anthropic API
+2. **Writes to a shared cache file** (`/tmp/claude_rate_limit_cache.json`)
+3. **Calculates global burn rate** by tracking 5h% changes over time
+4. **Auto-stops** after ~60 seconds of no Claude processes running
+
+### What the Daemon Does NOT Do
+
+- ❌ Does not send any data to external servers (only reads from Anthropic API)
+- ❌ Does not track your conversations or prompts
+- ❌ Does not run when Claude Code is not running
+- ❌ Does not use significant CPU or memory (~0.1% CPU when active)
+
+### Why Use It?
+
+| Scenario | Without Daemon | With Daemon |
+|----------|----------------|-------------|
+| Multiple tabs | Each tab refreshes independently | Shared cache, less API calls |
+| Rate limit accuracy | May be stale (up to 15s) | Always fresh |
+| Burn rate display | Only shows when actively typing | Shows even during pauses |
+
+### Technical Details
+
+```
+Location:     /tmp/claude_statusline_daemon.pid
+Log file:     /tmp/claude_statusline_daemon.log
+Cache file:   /tmp/claude_rate_limit_cache.json
+Refresh:      Every 15 seconds
+Idle timeout: 60 seconds (4 checks × 15s)
+```
+
+### Future Plans
+
+The daemon is currently **opt-in** (`ENABLE_DAEMON=false` by default). We may change this to **opt-out** in a future version once it has been thoroughly tested by the community. Any such change will be clearly documented in the changelog.
+
+---
+
+## Ollama / Local Models
+
+This statusline supports local models running via [Ollama](https://ollama.com/). When you use Ollama models with Claude Code, the statusline will:
+
+1. **Display the model name** with a 🦙 icon (e.g., `🦙 Qwen3`, `🦙 Llama3`)
+2. **Auto-detect your ACTUAL context size** (not just max capacity):
+   - If model is running: reads your configured `num_ctx` from `/api/ps`
+   - If not running: shows max capacity from `/api/show`
+3. **Cache the context size** for 30 seconds (short cache since config can change)
+
+### Requirements
+
+- [Ollama](https://ollama.com/) installed and running
+- Model pulled (e.g., `ollama pull qwen3-coder:30b`)
+
+### Using Ollama with Claude Code
+
+To use local models with Claude Code, you can integrate Ollama via MCP:
+
+- **[ollama-mcp](https://github.com/ollama/ollama-mcp)** - Official Ollama MCP server
+- **[Claude Code MCP Docs](https://docs.anthropic.com/en/docs/claude-code/mcp)** - How to configure MCP servers
+
+### Supported Models
+
+The statusline recognizes and shortens common model names:
+
+| Ollama Model | Displayed As |
+|--------------|--------------|
+| `qwen3-coder:30b` | `🦙 Qwen3` |
+| `llama3:8b` | `🦙 Llama3` |
+| `codellama:13b` | `🦙 CodeLlama` |
+| `mistral:7b` | `🦙 Mistral` |
+| `deepseek-coder:6.7b` | `🦙 DeepSeek` |
+| Other models | `🦙 <ModelName>` |
 
 ---
 
@@ -180,22 +267,14 @@ Run `/statusline:config` in Claude Code to check:
 
 ---
 
-## Beta Testing
+## What's New in v3.1.0
 
-Want to try new features before they're stable? Install the beta version:
-
-```bash
-# Install specific beta version
-claude plugins install Benniphx/claude-statusline@v3.1.0-beta.5
-
-# Or install latest from main (includes unreleased changes)
-claude plugins install Benniphx/claude-statusline@main
-```
-
-**Current Beta (v3.1.0-beta.5):**
-- Cross-session burn rate tracking
-- Background daemon for sync
-- XDG config path support (`~/.config/claude-statusline/config`)
+- **Ollama/Local model support** - Shows `🦙 Qwen3`, `🦙 Llama3`, etc. with auto-detected context size
+- **Shorter model names** - `Opus 4.5` instead of long display names
+- **Robust error handling** - No more crashes on startup
+- **Background daemon** - Opt-in via `ENABLE_DAEMON=true` in config
+- **Pace indicators** - See if you're on track (`1.0x`) or burning fast (`2.0x`)
+- **Work-day aware 7d** - Excludes weekends from pace calculation
 
 **Feedback:** [Open an issue](https://github.com/Benniphx/claude-statusline/issues) with `[beta]` in the title.
 

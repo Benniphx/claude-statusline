@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-02-03
+
+### Added
+- **Ollama/Local model support** - Displays local models with 🦙 icon
+  - Recognizes `ollama:model` format and common model names
+  - Shows short names: `🦙 Qwen3`, `🦙 Llama3`, `🦙 Mistral`, etc.
+  - **Auto-detects ACTUAL context size** via Ollama API:
+    - `/api/ps` for running models (shows your configured num_ctx)
+    - `/api/show` fallback (shows max model capacity)
+  - Caches context size for 30 seconds
+  - Fallback to 32K if Ollama not available
+- **Robust error handling** - No more crashes on empty/invalid input
+  - Validates all numeric values before arithmetic operations
+  - Shows "Starting..." with cached rate limits instead of errors
+- **Shorter model names** - Cleaner display
+  - `Opus 4.5` instead of `Claude Opus 4.5 (claude-opus-4-5-20251101)`
+  - `Sonnet 4`, `Haiku 3.5`, etc.
+
+### Changed
+- **Daemon is now config-controlled** - Set `ENABLE_DAEMON=true` in config to auto-start
+  - Starts automatically on session start when enabled
+  - No manual `--daemon` flag needed anymore
+  - Default remains `false` (disabled) - may become opt-out in future versions
+- **Dynamic context size** - Shows actual model context (200K, 1M, 32K, etc.)
+- Improved startup experience: shows cached 5h% while initializing
+
+### Fixed
+- Division by zero errors when context_size was empty
+- Integer comparison errors with non-numeric values
+- Crashes when JSON input was malformed or missing
+
+### Includes all beta features from 3.1.0-beta.1 through beta.5:
+- XDG config path support (`~/.config/claude-statusline/config`)
+- Simplified burn rate display with multi-session indicator (⚡)
+- Background daemon for cache refresh (opt-in)
+- Pace indicator for 5h and 7d limits
+- Work-day aware 7d calculation
+
 ## [3.1.0-beta.5] - 2026-01-28
 
 ### Added

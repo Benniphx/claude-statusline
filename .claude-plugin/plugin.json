@@ -1,25 +1,12 @@
 {
   "name": "statusline",
   "description": "Rich status line showing context window, rate limits, burn rate, and costs",
-  "version": "3.1.0-beta.5",
+  "version": "3.1.0",
   "author": {
     "name": "Benniphx",
     "url": "https://github.com/Benniphx"
   },
   "repository": "https://github.com/Benniphx/claude-statusline",
   "license": "MIT",
-  "keywords": ["statusline", "rate-limits", "context", "costs"],
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/statusline.sh --daemon"
-          }
-        ]
-      }
-    ]
-  }
+  "keywords": ["statusline", "rate-limits", "context", "costs", "ollama"]
 }
