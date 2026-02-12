@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.0] - 2026-02-12
+
+### Added
+- **Go rewrite** — Full statusline rewritten in Go for speed and maintainability
+  - Hexagonal architecture: `core/` (business logic), `adapter/` (platform, API, rendering)
+  - All existing features preserved: context %, model names, cost tracking, rate limits
+- **Agent count display** — Shows active Claude process count when >1 agent running
+- **Ollama token savings** — Tracks local model usage and calculates Haiku-equivalent cost savings
+- **Stale context fix** — Detects and ignores stale API percentage after context clear/compact
+
+### Changed
+- Binary replaces bash script as primary statusline renderer
+- Hooks now trigger on `startup|resume|clear|compact` (was only `startup`)
+- Bash script (`scripts/statusline.sh`) kept as legacy fallback
+
+### Breaking
+- Requires Go 1.22+ to build from source
+- Module path changed to `github.com/Benniphx/claude-statusline`
+
 ## [3.1.0] - 2026-02-03
 
 ### Added
