@@ -1,6 +1,6 @@
 # Claude Code Statusline
 
-![Stable](https://img.shields.io/badge/stable-v3.1.0-blue)
+![Stable](https://img.shields.io/badge/stable-v4.0.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -267,7 +267,7 @@ Run `/statusline:config` in Claude Code to check:
 
 ---
 
-## What's New in v3.1.0
+## What's New in v4.0.0
 
 - **Ollama/Local model support** - Shows `🦙 Qwen3`, `🦙 Llama3`, etc. with auto-detected context size
 - **Shorter model names** - `Opus 4.5` instead of long display names
