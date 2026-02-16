@@ -14,7 +14,7 @@ func runSetup() {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	binary := fs.String("binary", "", "path to the statusline binary")
 	projectDir := fs.String("project-dir", ".", "project directory")
-	pluginID := fs.String("plugin-id", "statusline@jobrad-claude-marketplace", "plugin identifier")
+	pluginID := fs.String("plugin-id", "statusline@claude-statusline", "plugin identifier")
 
 	if err := fs.Parse(os.Args[2:]); err != nil {
 		printJSON("systemMessage", fmt.Sprintf("Statusline setup: %v", err))

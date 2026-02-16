@@ -11,7 +11,7 @@ import (
 
 const cacheFile = "claude_statusline_update.txt"
 const cacheTTL = 24 * time.Hour
-const repo = "jobrad-gmbh/devex-claude-marketplace"
+const repo = "Benniphx/claude-statusline"
 
 // Check determines if an update is available.
 // Returns true and the latest version if newer than current.
