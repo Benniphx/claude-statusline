@@ -9,10 +9,13 @@ Rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-cod
 
 ## Features
 
-- **Context Window** - Progress bar with percentage and token count
+- **Context Window** - Progress bar with percentage and token count (color-coded: green → yellow → red)
 - **5h Rate Limit** - Usage + pace indicator + smart time display
 - **7d Rate Limit** - Usage + pace (work-day aware) + time display
 - **Pace Indicator** - Shows if you're on track (`1.0x`) or burning fast (`2.0x`)
+- **Agent Count** - Shows number of active Claude processes when running with subagents
+- **Ollama Savings Tracker** - Tracks local model usage and shows estimated Haiku-equivalent cost savings
+- **Stale Context Detection** - Ignores stale API percentages after clear/compact
 - **Cross-Tab Sync** - All sessions share rate limit data (10s refresh)
 - **API-Key Mode** - Session + daily cost tracking with burn rate
 
@@ -37,46 +40,49 @@ claude plugin install statusline
 ### Subscription Mode
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Claude 3.5  │  Ctx: ████░░░░ 45% (90K/200K)  │  5h: ██████░░ 72% 1.3x  │ ... │
-└─────────────────────────────────────────────────────────────────────────────┘
+Opus 4.6 (3)  │  Ctx: ██░░░░░░ 30% (60K/200K)  │  5h: ███░░░░░ 46% 0.5x →47m  │  🔥 5.0K t/m  │  7d: ██░░░░░░ 27% 0.6x  │  12m │ +142/-38  │  🦙 saved ~$1.71 (387 req · 3.3M tok)
 ```
 
-**Context Window:**
-| Example | Meaning |
-|---------|---------|
-| `Ctx: ████░░░░ 45%` | 45% of context used |
-| `Ctx: ██████░░ 75% ⚠️` | Warning at threshold (configurable) |
+| Section | Description |
+|---------|-------------|
+| `Opus 4.6` | Model name, color-coded by context usage (green <50%, yellow 50-80%, red >80%) |
+| `(3)` | Active Claude processes — only shown when >1 (teams/subagents) |
+| `Ctx: ██░░░░░░ 30% (60K/200K)` | Context window: progress bar + percentage + tokens used/total |
+| `5h: ███░░░░░ 46% 0.5x →47m` | 5-hour rate limit: usage, pace (0.5x = half speed), time until reset |
+| `🔥 5.0K t/m` | Burn rate: tokens per minute (current consumption speed) |
+| `7d: ██░░░░░░ 27% 0.6x` | 7-day rate limit: weekly usage + pace |
+| `12m` | Session duration in minutes |
+| `+142/-38` | Lines added (green) / removed (red) in this session |
+| `🦙 saved ~$1.71 (387 req · 3.3M tok)` | Ollama savings: estimated Haiku-equivalent cost saved by running locally |
 
-**5h Rate Limit (Pace = usage speed vs sustainable):**
+**Pace details:**
 | Example | Meaning |
 |---------|---------|
-| `5h: ████░░░░ 40% 0.8x` | 🟢 Under budget (sustainable) |
-| `5h: ██████░░ 72% 1.3x` | 🟡 30% over sustainable pace |
-| `5h: ████████ 95% 2.1x ⚠️` | 🔴 Will hit limit before reset |
+| `5h: ████░░░░ 40% 0.8x` | Under budget (sustainable) |
+| `5h: ██████░░ 72% 1.3x` | 30% over sustainable pace |
+| `5h: ████████ 95% 2.1x` | Will hit limit before reset |
 | `5h: ██████░░ 85% 1.3x →45m` | Reset in 45min (shown when ≤1h) |
 | `5h: ███████░ 90% 1.5x →12m @14:30` | Reset at 14:30 (shown when ≤30m) |
-
-**7d Rate Limit (Work-day aware):**
-| Example | Meaning |
-|---------|---------|
-| `7d: ███░░░░░ 35% 0.8x` | 🟢 On track for the week |
-| `7d: █████░░░ 60% 1.4x ⚠️` | 🔴 Over budget, pace warning |
-| `7d: ██████░░ 72% 0.9x →2d` | Reset in 2 days (shown only when ≤3d) |
 
 ### API-Key Mode
 
 ```
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│ Claude 3.5  │  Ctx: ████░░░░ 45%  │  💰 $0.42  │  📅 $3.85  │  🔥 8.2K t/m $1.20/h │
-└───────────────────────────────────────────────────────────────────────────────────┘
+Opus 4.6  │  Ctx: ████░░░░ 45% (90K/200K)  │  💰 $0.42  │  📅 $3.85  │  🔥 8.2K t/m $1.20/h  │  12m │ +142/-38
 ```
 
-| Element | Meaning |
-|---------|---------|
-| `💰 $0.42` | Current session cost |
-| `📅 $3.85` | Today's total (all sessions) |
-| `🔥 8.2K t/m $1.20/h` | Burn rate: tokens/min + cost/hour |
+| Section | Description |
+|---------|-------------|
+| `💰 $0.42` | Session cost (green <$0.50, yellow <$2.00, red >$2.00) |
+| `📅 $3.85` | Daily cost across all sessions today (green <$5, yellow <$20, red >$20) |
+| `🔥 8.2K t/m $1.20/h` | Burn rate: tokens/min + cost per hour (green <$1/h, yellow <$5/h, red >$5/h) |
+
+### Local Models
+
+Ollama/local models display with the llama icon and detected context size:
+
+```
+🦙 Qwen3  │  Ctx: █░░░░░░░ 15% (3K/32K)  │  ...
+```
 
 ---
 
@@ -193,6 +199,7 @@ This statusline supports local models running via [Ollama](https://ollama.com/).
    - If model is running: reads your configured `num_ctx` from `/api/ps`
    - If not running: shows max capacity from `/api/show`
 3. **Cache the context size** for 30 seconds (short cache since config can change)
+4. **Track savings** when routing tasks locally instead of using the Haiku API
 
 ### Requirements
 
@@ -218,6 +225,29 @@ The statusline recognizes and shortens common model names:
 | `mistral:7b` | `🦙 Mistral` |
 | `deepseek-coder:6.7b` | `🦙 DeepSeek` |
 | Other models | `🦙 <ModelName>` |
+
+### Ollama Savings Tracker
+
+When you run tasks locally via Ollama instead of the Haiku API, the statusline tracks usage and shows estimated savings:
+
+```
+🦙 saved ~$1.71 (387 req · 3.3M tok)
+```
+
+**How it works:**
+- Your Ollama agent writes stats to `/tmp/claude_ollama_stats.json` after each API call
+- The statusline reads this file and calculates what those tokens would have cost using Haiku pricing ($0.25/1M input, $1.25/1M output)
+- Stats are only shown when the file exists and is fresh (< 5 minutes old)
+
+**Stats file format:**
+```json
+{
+  "requests": 387,
+  "total_prompt_tokens": 2400000,
+  "total_completion_tokens": 890000,
+  "last_updated": 1739367600
+}
+```
 
 ---
 
@@ -267,16 +297,39 @@ Run `/statusline:config` in Claude Code to check:
 
 ---
 
+## Architecture (v4.0.0)
+
+v4.0.0 is a complete rewrite from Bash to Go with hexagonal architecture:
+
+```
+core/                    Domain logic (pure, no I/O)
+  context/               Context window calculations
+  ratelimit/             Rate limits, burn rate, pace
+  cost/                  Session cost tracking
+  agents/                Claude process counting
+  ollama/                Ollama stats reader + savings calculation
+  model/                 Model detection + Ollama context
+  update/                Update check
+  daemon/                Background daemon
+adapter/                 Implementations
+  api/                   HTTP client for Anthropic + GitHub APIs
+  cache/                 File-based cache with TTL
+  config/                Config file parsing
+  platform/              OS-specific (macOS/Linux) process detection
+  render/                ANSI color output + progress bars
+cmd/statusline/          Entry point
+```
+
 ## What's New in v4.0.0
 
-- **Ollama/Local model support** - Shows `🦙 Qwen3`, `🦙 Llama3`, etc. with auto-detected context size
-- **Shorter model names** - `Opus 4.5` instead of long display names
-- **Robust error handling** - No more crashes on startup
-- **Background daemon** - Opt-in via `ENABLE_DAEMON=true` in config
-- **Pace indicators** - See if you're on track (`1.0x`) or burning fast (`2.0x`)
-- **Work-day aware 7d** - Excludes weekends from pace calculation
+- **Go rewrite** — Full statusline rewritten in Go for speed and maintainability
+- **Agent count display** — Shows active Claude process count when running subagents: `Opus 4.6 (3)`
+- **Ollama savings tracker** — Tracks local model usage and calculates Haiku-equivalent cost savings: `🦙 saved ~$1.71 (387 req · 3.3M tok)`
+- **Stale context fix** — Detects and ignores stale API percentages after context clear/compact
+- **Hooks on more events** — Now triggers on `startup|resume|clear|compact` (was only startup)
+- All v3.x features preserved: pace indicators, work-day aware 7d, Ollama model display, daemon, cross-tab sync
 
-**Feedback:** [Open an issue](https://github.com/Benniphx/claude-statusline/issues) with `[beta]` in the title.
+**Feedback:** [Open an issue](https://github.com/Benniphx/claude-statusline/issues).
 
 ---
 
