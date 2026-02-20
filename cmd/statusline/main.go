@@ -97,10 +97,10 @@ func main() {
 
 	// 3. Rate limit sections (OAuth) or Cost sections (API key)
 	if creds.HasOAuth() {
-		rate := ratelimit.RenderSections(input, creds, cfg, plat, store, api, rend)
+		rate := ratelimit.RenderSections(input, creds, cfg, plat, store, api, rend, modelInfo.CostTier)
 		sections = append(sections, rate.FiveHour, rate.Burn, rate.SevenDay)
 	} else {
-		cs := cost.RenderSections(input, cfg, plat, store, rend)
+		cs := cost.RenderSections(input, cfg, plat, store, rend, modelInfo.CostTier)
 		sections = append(sections, cs.Session, cs.Daily, cs.Burn)
 	}
 

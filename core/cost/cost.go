@@ -130,7 +130,7 @@ func sumTracker(path string, store ports.CacheStore) float64 {
 }
 
 // RenderSections produces the three cost display sections for assembly by main.go.
-func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, r ports.Renderer) CostSections {
+func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, r ports.Renderer, costTier types.CostTier) CostSections {
 	display := Track(input, cfg, plat, store)
 
 	// Local burn rate
@@ -154,15 +154,25 @@ func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo
 	dailyColor := costColor(display.DailyCost, 5.00, 20.00)
 	dailyStr := fmt.Sprintf("📅 %s", r.Color(fmt.Sprintf("$%.2f", display.DailyCost), dailyColor))
 
+	// Apply cost normalization to burn rate and cost/hour
+	normTPM, isNormalized := NormalizeBurnRate(float64(localTPM), costTier, cfg)
+	normCPH, _ := NormalizeCostPerHour(display.CostPerHour, costTier, cfg)
+
 	// Burn: "TPM t/m $X.XX/h" or "--"
 	var burnStr string
 	if localTPM > 0 {
-		tpmFmt := r.FormatTokensF(localTPM)
-		burnColor := costColor(display.CostPerHour, 1.00, 5.00)
-		burnStr = fmt.Sprintf("🔥 %s %s %s%s",
+		tpmFmt := r.FormatTokensF(int(normTPM))
+		burnColor := costColor(normCPH, 1.00, 5.00)
+		prefix := ""
+		if isNormalized {
+			prefix = "≈"
+		}
+		burnStr = fmt.Sprintf("🔥 %s%s %s %s%s%s",
+			prefix,
 			r.Color(tpmFmt, render.Magenta),
 			r.Dim("t/m"),
-			r.Color(fmt.Sprintf("$%.2f", display.CostPerHour), burnColor),
+			prefix,
+			r.Color(fmt.Sprintf("$%.2f", normCPH), burnColor),
 			r.Dim("/h"))
 	} else {
 		burnStr = "🔥 " + r.Dim("--")
@@ -177,7 +187,7 @@ func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo
 
 // Render produces the full cost string (legacy compatibility).
 func Render(input types.Input, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, r ports.Renderer) string {
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.CostTierSonnet)
 	sep := "  " + r.Dim("│") + "  "
 	return sections.Session + sep + sections.Daily + sep + sections.Burn
 }
