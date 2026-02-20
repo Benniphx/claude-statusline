@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0-beta.1] - 2026-02-20
+
+### Added
+- **Model cost-normalized burn rate and pace** ([JRDEX-419](https://jobrad.atlassian.net/browse/JRDEX-419))
+  - Burn rate (`🔥 t/m`) and pace (`Xx`) now reflect model cost relative to Sonnet baseline
+  - Opus (5×): `🔥 ≈60K t/m`, `≈6.0x` — visually loud when burning expensive tokens
+  - Haiku (0.25×): `🔥 ≈3K t/m`, `≈0.2x` — clearly cheap
+  - Sonnet (1.0×): unchanged, no `≈` prefix
+  - `≈` prefix signals cost-adjusted (not raw) value
+  - Existing color thresholds unchanged — Opus turns red at lower raw usage
+- **New config options** in `~/.claude-statusline.conf`:
+  - `COST_NORMALIZE=true|false` — disable normalization
+  - `COST_WEIGHT_HAIKU=0.25`, `COST_WEIGHT_SONNET=1.0`, `COST_WEIGHT_OPUS=5.0`
+
 ## [3.1.0-beta.4] - 2026-01-26
 
 ### Changed
