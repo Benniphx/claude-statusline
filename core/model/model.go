@@ -33,11 +33,12 @@ func Resolve(modelID, displayName string, ollama ports.OllamaClient, cacheDir st
 	}
 
 	// Claude model patterns
-	if short, ok := matchClaude(lower); ok {
+	if short, tier, ok := matchClaude(lower); ok {
 		return types.ModelInfo{
 			ShortName:      short,
 			DefaultContext: defaultClaudeContext,
 			IsLocal:        false,
+			CostTier:       tier,
 		}
 	}
 
@@ -50,36 +51,53 @@ func Resolve(modelID, displayName string, ollama ports.OllamaClient, cacheDir st
 		name = modelID
 	}
 
+	// Detect cost tier from display name fallback
+	tier := detectCostTier(displayName)
+
 	return types.ModelInfo{
 		ShortName:      name,
 		DefaultContext: defaultClaudeContext,
 		IsLocal:        false,
+		CostTier:       tier,
 	}
 }
 
-func matchClaude(lower string) (string, bool) {
+func matchClaude(lower string) (string, types.CostTier, bool) {
 	switch {
 	case strings.Contains(lower, "opus-4-5") || strings.Contains(lower, "opus-4.5"):
-		return "Opus 4.5", true
+		return "Opus 4.5", types.CostTierOpus, true
 	case strings.Contains(lower, "opus-4-6") || strings.Contains(lower, "opus-4.6"):
-		return "Opus 4.6", true
+		return "Opus 4.6", types.CostTierOpus, true
 	case strings.Contains(lower, "sonnet-4-5") || strings.Contains(lower, "sonnet-4.5"):
-		return "Sonnet 4.5", true
+		return "Sonnet 4.5", types.CostTierSonnet, true
 	// 3.5 patterns before generic 4/3 to avoid false matches
 	case strings.Contains(lower, "3-5-sonnet") || strings.Contains(lower, "sonnet-3.5") || strings.Contains(lower, "sonnet-3-5"):
-		return "Sonnet 3.5", true
+		return "Sonnet 3.5", types.CostTierSonnet, true
 	case strings.Contains(lower, "sonnet-4"):
-		return "Sonnet 4", true
+		return "Sonnet 4", types.CostTierSonnet, true
 	case strings.Contains(lower, "3-opus") || strings.Contains(lower, "opus-3"):
-		return "Opus 3", true
+		return "Opus 3", types.CostTierOpus, true
 	case strings.Contains(lower, "3-5-haiku") || strings.Contains(lower, "haiku-3.5") || strings.Contains(lower, "haiku-3-5"):
-		return "Haiku 3.5", true
+		return "Haiku 3.5", types.CostTierHaiku, true
 	case strings.Contains(lower, "3-haiku") || strings.Contains(lower, "haiku-3"):
-		return "Haiku 3", true
+		return "Haiku 3", types.CostTierHaiku, true
 	case strings.Contains(lower, "haiku-4"):
-		return "Haiku 4", true
+		return "Haiku 4", types.CostTierHaiku, true
 	}
-	return "", false
+	return "", types.CostTierSonnet, false
+}
+
+// detectCostTier determines cost tier from a display name string.
+func detectCostTier(displayName string) types.CostTier {
+	lower := strings.ToLower(displayName)
+	switch {
+	case strings.Contains(lower, "opus"):
+		return types.CostTierOpus
+	case strings.Contains(lower, "haiku"):
+		return types.CostTierHaiku
+	default:
+		return types.CostTierSonnet
+	}
 }
 
 func resolveOllama(modelID string, ollama ports.OllamaClient, cacheDir string) types.ModelInfo {
