@@ -2,6 +2,8 @@ package model
 
 import (
 	"testing"
+
+	"github.com/Benniphx/claude-statusline/core/types"
 )
 
 // mockOllama implements ports.OllamaClient for testing.
@@ -109,5 +111,58 @@ func TestResolveFallback(t *testing.T) {
 	info2 := Resolve("unknown-model-id", "", nil, "")
 	if info2.ShortName != "unknown-model-id" {
 		t.Errorf("ShortName = %q, want %q", info2.ShortName, "unknown-model-id")
+	}
+}
+
+func TestResolveCostTier(t *testing.T) {
+	tests := []struct {
+		modelID     string
+		displayName string
+		wantTier    types.CostTier
+	}{
+		// Opus models → CostTierOpus
+		{"claude-opus-4-5-20251101", "Claude Opus 4.5", types.CostTierOpus},
+		{"claude-opus-4-6-20260101", "Claude Opus 4.6", types.CostTierOpus},
+		{"claude-3-opus-20240229", "Claude Opus 3", types.CostTierOpus},
+		// Sonnet models → CostTierSonnet
+		{"claude-sonnet-4-5-20250929", "Claude Sonnet 4.5", types.CostTierSonnet},
+		{"claude-sonnet-4-20250514", "Claude Sonnet 4", types.CostTierSonnet},
+		{"claude-3-5-sonnet-20241022", "Claude Sonnet 3.5", types.CostTierSonnet},
+		// Haiku models → CostTierHaiku
+		{"claude-3-5-haiku-20241022", "Claude Haiku 3.5", types.CostTierHaiku},
+		{"some-haiku-3-variant", "Custom", types.CostTierHaiku},
+		{"claude-haiku-4-variant", "Haiku 4", types.CostTierHaiku},
+		// Fallback from display_name
+		{"unknown-id", "Claude Opus 4.6", types.CostTierOpus},
+		{"unknown-id", "Claude Haiku 3.5", types.CostTierHaiku},
+		{"unknown-id", "Claude Sonnet 4", types.CostTierSonnet},
+		// Unknown → default Sonnet
+		{"unknown-id", "Unknown Model", types.CostTierSonnet},
+		{"unknown-id", "", types.CostTierSonnet},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.modelID+"_"+tt.displayName, func(t *testing.T) {
+			info := Resolve(tt.modelID, tt.displayName, nil, "")
+			if info.CostTier != tt.wantTier {
+				t.Errorf("CostTier = %v, want %v", info.CostTier, tt.wantTier)
+			}
+		})
+	}
+}
+
+func TestResolveCostTierOllama(t *testing.T) {
+	// Ollama models should default to Sonnet tier
+	info := Resolve("ollama:qwen3-coder-latest", "", nil, "")
+	if info.CostTier != types.CostTierSonnet {
+		t.Errorf("Ollama CostTier = %v, want CostTierSonnet", info.CostTier)
+	}
+}
+
+func TestResolveCostTierLocal(t *testing.T) {
+	// Local models should default to Sonnet tier
+	info := Resolve("some-local-model", "", nil, "")
+	if info.CostTier != types.CostTierSonnet {
+		t.Errorf("Local CostTier = %v, want CostTierSonnet", info.CostTier)
 	}
 }
