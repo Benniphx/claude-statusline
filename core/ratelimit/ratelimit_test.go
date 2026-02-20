@@ -245,7 +245,7 @@ func TestRenderSectionsSuccess(t *testing.T) {
 		Cost: types.Cost{TotalDurationMS: 300000}, // 5 min
 	}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, types.CostTierSonnet)
 
 	// FiveHour section
 	if !strings.Contains(sections.FiveHour, "5h:") {
@@ -285,7 +285,7 @@ func TestRenderSectionsError(t *testing.T) {
 	plat := &mockPlatform{}
 	input := types.Input{}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, types.CostTierSonnet)
 
 	if !strings.Contains(sections.FiveHour, "5h:") || !strings.Contains(sections.FiveHour, "--") {
 		t.Errorf("FiveHour on error should be '5h: --', got: %s", sections.FiveHour)
@@ -329,7 +329,7 @@ func TestRenderSectionsNoBurn(t *testing.T) {
 		Cost: types.Cost{TotalDurationMS: 45000},
 	}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, types.CostTierSonnet)
 
 	if !strings.Contains(sections.Burn, "--") {
 		t.Errorf("Burn should show '--' with short duration, got: %s", sections.Burn)
@@ -419,7 +419,7 @@ func TestRenderFiveHourWithPace(t *testing.T) {
 		HittingLimit: false,
 	}
 
-	result := renderFiveHour(data, pace, r)
+	result := renderFiveHour(data, pace, r, false)
 	if !strings.Contains(result, "50%") {
 		t.Errorf("should contain '50%%', got: %s", result)
 	}
@@ -439,7 +439,7 @@ func TestRenderFiveHourHittingLimit(t *testing.T) {
 		HittingLimit: true,
 	}
 
-	result := renderFiveHour(data, pace, r)
+	result := renderFiveHour(data, pace, r, false)
 	if !strings.Contains(result, "⚠️") {
 		t.Errorf("should contain ⚠️ when hitting limit, got: %s", result)
 	}
@@ -449,7 +449,7 @@ func TestRenderBurnWithTPM(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 15000}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, r, types.CostTierSonnet, types.DefaultConfig())
 	if !strings.Contains(result, "15.0K") {
 		t.Errorf("should format 15000 TPM as '15.0K', got: %s", result)
 	}
@@ -462,7 +462,7 @@ func TestRenderBurnNone(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 0}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, r, types.CostTierSonnet, types.DefaultConfig())
 	if !strings.Contains(result, "--") {
 		t.Errorf("should show '--' with no TPM, got: %s", result)
 	}
@@ -472,7 +472,7 @@ func TestRenderBurnHighActivity(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 5000, IsHighActivity: true}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, r, types.CostTierSonnet, types.DefaultConfig())
 	if !strings.Contains(result, "⚡") {
 		t.Errorf("should contain ⚡ for high activity, got: %s", result)
 	}
@@ -482,7 +482,7 @@ func TestRenderBurnHighActivityNoLocal(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 0, IsHighActivity: true}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, r, types.CostTierSonnet, types.DefaultConfig())
 	if !strings.Contains(result, "⚡") {
 		t.Errorf("should contain ⚡ for high activity even without local TPM, got: %s", result)
 	}
@@ -501,7 +501,7 @@ func TestRenderSevenDayWithPace(t *testing.T) {
 		SevenDayPace: 0.8,
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, r, false)
 	if !strings.Contains(result, "25%") {
 		t.Errorf("should contain '25%%', got: %s", result)
 	}
@@ -520,7 +520,7 @@ func TestRenderSevenDayOverPace(t *testing.T) {
 		SevenDayPace: 1.5,
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, r, false)
 	if !strings.Contains(result, "⚠️") {
 		t.Errorf("should contain ⚠️ when 7d pace > 1.0, got: %s", result)
 	}
@@ -537,8 +537,122 @@ func TestRenderSevenDayWithResetDays(t *testing.T) {
 		SevenDayResetFmt: "→2d",
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, r, false)
 	if !strings.Contains(result, "→2d") {
 		t.Errorf("should contain '→2d', got: %s", result)
+	}
+}
+
+func TestRenderBurnNormalizedOpus(t *testing.T) {
+	r := &mockRenderer{}
+	cfg := types.DefaultConfig()
+
+	// 15K TPM raw, Opus 5x → 75K normalized
+	burn := types.BurnInfo{LocalTPM: 15000}
+	result := renderBurn(burn, r, types.CostTierOpus, cfg)
+
+	// Should have ≈ prefix
+	if !strings.Contains(result, "≈") {
+		t.Errorf("Opus burn should contain ≈ prefix, got: %s", result)
+	}
+	// Should show normalized value (75K)
+	if !strings.Contains(result, "75.0K") {
+		t.Errorf("Opus burn should show 75.0K (15K*5), got: %s", result)
+	}
+}
+
+func TestRenderBurnNormalizedSonnet(t *testing.T) {
+	r := &mockRenderer{}
+	cfg := types.DefaultConfig()
+
+	// Sonnet (baseline) should NOT have ≈ prefix
+	burn := types.BurnInfo{LocalTPM: 15000}
+	result := renderBurn(burn, r, types.CostTierSonnet, cfg)
+
+	if strings.Contains(result, "≈") {
+		t.Errorf("Sonnet burn should NOT contain ≈ prefix, got: %s", result)
+	}
+	if !strings.Contains(result, "15.0K") {
+		t.Errorf("Sonnet burn should show raw 15.0K, got: %s", result)
+	}
+}
+
+func TestRenderFiveHourNormalized(t *testing.T) {
+	r := &mockRenderer{}
+
+	data := types.RateLimitData{FiveHourPercent: 50.0}
+	pace := types.PaceInfo{FiveHourPace: 1.2}
+
+	// Normalized (Opus) → should have ≈ prefix on pace
+	result := renderFiveHour(data, pace, r, true)
+	if !strings.Contains(result, "≈1.2x") {
+		t.Errorf("Normalized 5h pace should contain ≈1.2x, got: %s", result)
+	}
+
+	// Not normalized (Sonnet) → no prefix
+	result2 := renderFiveHour(data, pace, r, false)
+	if strings.Contains(result2, "≈") {
+		t.Errorf("Non-normalized 5h pace should NOT contain ≈, got: %s", result2)
+	}
+}
+
+func TestRenderSevenDayNormalized(t *testing.T) {
+	r := &mockRenderer{}
+
+	data := types.RateLimitData{SevenDayPercent: 25.0}
+	pace := types.PaceInfo{SevenDayPace: 0.8}
+
+	// Normalized → should have ≈ prefix
+	result := renderSevenDay(data, pace, r, true)
+	if !strings.Contains(result, "≈0.8x") {
+		t.Errorf("Normalized 7d pace should contain ≈0.8x, got: %s", result)
+	}
+
+	// Not normalized → no prefix
+	result2 := renderSevenDay(data, pace, r, false)
+	if strings.Contains(result2, "≈") {
+		t.Errorf("Non-normalized 7d pace should NOT contain ≈, got: %s", result2)
+	}
+}
+
+func TestRenderSectionsNormalizedOpus(t *testing.T) {
+	store := newMockCache()
+	r := &mockRenderer{}
+
+	now := time.Now()
+	resp := types.RateLimitResponse{
+		FiveHour: types.RateLimitWindow{
+			Utilization: 50,
+			ResetsAt:    now.Add(3 * time.Hour).Format(time.RFC3339),
+		},
+		SevenDay: types.RateLimitWindow{
+			Utilization: 25,
+			ResetsAt:    now.Add(5 * 24 * time.Hour).Format(time.RFC3339),
+		},
+	}
+	raw, _ := json.Marshal(resp)
+	store.files["/tmp/"+cacheName] = raw
+	store.fresh["/tmp/"+cacheName] = true
+
+	creds := types.Credentials{OAuthToken: "token"}
+	cfg := types.DefaultConfig()
+	plat := &mockPlatform{}
+
+	input := types.Input{
+		ContextWindow: types.ContextWindow{
+			CurrentUsage: types.CurrentUsage{
+				InputTokens:              80000,
+				CacheCreationInputTokens: 5000,
+				CacheReadInputTokens:     5000,
+			},
+		},
+		Cost: types.Cost{TotalDurationMS: 300000},
+	}
+
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, types.CostTierOpus)
+
+	// Burn should have ≈ prefix for Opus
+	if !strings.Contains(sections.Burn, "≈") {
+		t.Errorf("Opus RenderSections burn should contain ≈, got: %s", sections.Burn)
 	}
 }

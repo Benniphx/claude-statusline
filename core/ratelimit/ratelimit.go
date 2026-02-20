@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Benniphx/claude-statusline/adapter/render"
+	"github.com/Benniphx/claude-statusline/core/cost"
 	"github.com/Benniphx/claude-statusline/core/ports"
 	"github.com/Benniphx/claude-statusline/core/types"
 )
@@ -72,7 +73,7 @@ func parseResponse(resp *types.RateLimitResponse) (types.RateLimitData, error) {
 }
 
 // RenderSections produces the three rate limit sections for assembly by main.go.
-func RenderSections(input types.Input, creds types.Credentials, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, api ports.APIClient, r ports.Renderer) RateSections {
+func RenderSections(input types.Input, creds types.Credentials, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, api ports.APIClient, r ports.Renderer, costTier types.CostTier) RateSections {
 	data, err := Load(creds, cfg, store, api)
 	if err != nil {
 		return RateSections{
@@ -87,21 +88,34 @@ func RenderSections(input types.Input, creds types.Credentials, cfg types.Config
 	globalBurn := LoadBurnRate(cfg, store)
 	burn := MergeLocalGlobal(localBurn, globalBurn)
 
+	// Apply cost normalization to pace
+	normFiveHourPace, _ := cost.NormalizePace(pace.FiveHourPace, costTier, cfg)
+	normSevenDayPace, _ := cost.NormalizePace(pace.SevenDayPace, costTier, cfg)
+	normPace := pace
+	normPace.FiveHourPace = normFiveHourPace
+	normPace.SevenDayPace = normSevenDayPace
+
+	isNormalized := cost.IsNonBaseline(costTier) && cfg.CostNormalize
+
 	return RateSections{
-		FiveHour: renderFiveHour(data, pace, r),
-		Burn:     renderBurn(burn, r),
-		SevenDay: renderSevenDay(data, pace, r),
+		FiveHour: renderFiveHour(data, normPace, r, isNormalized),
+		Burn:     renderBurn(burn, r, costTier, cfg),
+		SevenDay: renderSevenDay(data, normPace, r, isNormalized),
 	}
 }
 
-func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, r ports.Renderer) string {
+func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, r ports.Renderer, isNormalized bool) string {
 	fivePct := int(math.Round(data.FiveHourPercent))
 	bar := r.MakeBar(fivePct, 8)
 	rateDisplay := r.Colorize(fmt.Sprintf("%d%%", fivePct), fivePct)
 
-	// Pace
+	// Pace (with ≈ prefix if normalized)
 	if pace.FiveHourPace > 0 {
-		rateDisplay += " " + paceColorize(pace.FiveHourPace, r)
+		prefix := ""
+		if isNormalized {
+			prefix = "≈"
+		}
+		rateDisplay += " " + prefix + paceColorize(pace.FiveHourPace, r)
 	}
 
 	// Hitting limit warning
@@ -117,12 +131,17 @@ func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, r ports.Rende
 	return fmt.Sprintf("5h: %s %s", bar, rateDisplay)
 }
 
-func renderBurn(burn types.BurnInfo, r ports.Renderer) string {
+func renderBurn(burn types.BurnInfo, r ports.Renderer, costTier types.CostTier, cfg types.Config) string {
 	localTPM := int(burn.LocalTPM)
 
 	if localTPM > 0 {
-		tpmStr := r.FormatTokensF(localTPM)
-		display := fmt.Sprintf("🔥 %s %s", r.Color(tpmStr, render.Magenta), r.Dim("t/m"))
+		normTPM, isNormalized := cost.NormalizeBurnRate(float64(localTPM), costTier, cfg)
+		tpmStr := r.FormatTokensF(int(normTPM))
+		prefix := ""
+		if isNormalized {
+			prefix = "≈"
+		}
+		display := fmt.Sprintf("🔥 %s%s %s", prefix, r.Color(tpmStr, render.Magenta), r.Dim("t/m"))
 		if burn.IsHighActivity {
 			display += " " + r.Color("⚡", render.Yellow)
 		}
@@ -136,17 +155,21 @@ func renderBurn(burn types.BurnInfo, r ports.Renderer) string {
 	return "🔥 " + r.Dim("--")
 }
 
-func renderSevenDay(data types.RateLimitData, pace types.PaceInfo, r ports.Renderer) string {
+func renderSevenDay(data types.RateLimitData, pace types.PaceInfo, r ports.Renderer, isNormalized bool) string {
 	sevenPct := int(math.Round(data.SevenDayPercent))
 	bar := r.MakeBar(sevenPct, 8)
 	display := r.Colorize(fmt.Sprintf("%d%%", sevenPct), sevenPct)
 
-	// Pace
+	// Pace (with ≈ prefix if normalized)
 	if pace.SevenDayPace > 0 {
-		display += " " + paceColorize(pace.SevenDayPace, r)
+		prefix := ""
+		if isNormalized {
+			prefix = "≈"
+		}
+		display += " " + prefix + paceColorize(pace.SevenDayPace, r)
 	}
 
-	// 7-day warning (pace > 1.0)
+	// 7-day warning (pace > 1.0, using normalized value)
 	if pace.SevenDayPace > 1.0 {
 		display += " " + r.Color("⚠️", render.Red)
 	}
