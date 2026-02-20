@@ -238,7 +238,7 @@ func TestRenderSectionsWithBurnRate(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 300000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.CostTierSonnet)
 
 	// Session
 	if !strings.Contains(sections.Session, "💰") {
@@ -280,7 +280,7 @@ func TestRenderSectionsNoBurn(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.02, TotalDurationMS: 45000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.CostTierSonnet)
 
 	if !strings.Contains(sections.Burn, "🔥") {
 		t.Error("Burn should contain 🔥 even with no burn data")
@@ -307,7 +307,7 @@ func TestRenderSectionsZeroDuration(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0, TotalDurationMS: 0},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.CostTierSonnet)
 
 	if !strings.Contains(sections.Session, "$0.00") {
 		t.Errorf("Session should be $0.00, got: %s", sections.Session)
@@ -333,7 +333,7 @@ func TestRenderSectionsLegacyTokenBurn(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.75, TotalDurationMS: 300000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.CostTierSonnet)
 
 	// Should compute burn from legacy tokens
 	if !strings.Contains(sections.Burn, "t/m") {
@@ -378,6 +378,59 @@ func TestMultipleSessionsDailyAccumulation(t *testing.T) {
 	// Daily should be sum of both sessions
 	if displayB.DailyCost < 2.99 || displayB.DailyCost > 3.01 {
 		t.Errorf("DailyCost should be ≈3.00 (1+2), got %f", displayB.DailyCost)
+	}
+}
+
+func TestRenderSectionsNormalizedOpus(t *testing.T) {
+	r := &mockRenderer{}
+	store := newMockCache()
+	plat := &mockPlatform{sessionID: "s1", stable: true}
+	cfg := types.DefaultConfig()
+
+	// 90K tokens over 5 minutes → 18K TPM raw, Opus 5x → 90K normalized
+	input := types.Input{
+		ContextWindow: types.ContextWindow{
+			ContextWindowSize: 200000,
+			CurrentUsage: types.CurrentUsage{
+				InputTokens:              80000,
+				CacheCreationInputTokens: 5000,
+				CacheReadInputTokens:     5000,
+			},
+		},
+		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 300000},
+	}
+
+	sections := RenderSections(input, cfg, plat, store, r, types.CostTierOpus)
+
+	// Should have approximate prefix for non-baseline model
+	if !strings.Contains(sections.Burn, "≈") {
+		t.Errorf("Opus burn should contain ≈ prefix, got: %s", sections.Burn)
+	}
+}
+
+func TestRenderSectionsNormalizedSonnet(t *testing.T) {
+	r := &mockRenderer{}
+	store := newMockCache()
+	plat := &mockPlatform{sessionID: "s1", stable: true}
+	cfg := types.DefaultConfig()
+
+	// Sonnet (baseline) should NOT have ≈ prefix
+	input := types.Input{
+		ContextWindow: types.ContextWindow{
+			ContextWindowSize: 200000,
+			CurrentUsage: types.CurrentUsage{
+				InputTokens:              80000,
+				CacheCreationInputTokens: 5000,
+				CacheReadInputTokens:     5000,
+			},
+		},
+		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 300000},
+	}
+
+	sections := RenderSections(input, cfg, plat, store, r, types.CostTierSonnet)
+
+	if strings.Contains(sections.Burn, "≈") {
+		t.Errorf("Sonnet burn should NOT contain ≈ prefix, got: %s", sections.Burn)
 	}
 }
 

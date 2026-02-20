@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.1.0] - 2026-02-20
+
+### Added
+- **Cost-normalized burn rate and pace** — Values adjusted by model cost tier
+  - Opus: 5x multiplier (burns budget faster)
+  - Sonnet: 1x baseline (no change)
+  - Haiku: 0.25x multiplier (burns budget slower)
+  - Non-baseline models show "≈" prefix on normalized values
+  - Applied to: burn rate (t/m), cost/hour, 5h pace, 7d pace
+- **Config support** for cost normalization weights:
+  - `COST_NORMALIZE=true|false` (default: true)
+  - `COST_WEIGHT_OPUS=5.0`, `COST_WEIGHT_SONNET=1.0`, `COST_WEIGHT_HAIKU=0.25`
+
 ## [4.0.0] - 2026-02-12
 
 ### Added
