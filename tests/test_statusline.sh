@@ -422,6 +422,77 @@ else
 fi
 
 # ============================================
+# v3.2 Cost Normalization Tests
+# ============================================
+
+# Test 33: COST_NORMALIZE config present
+echo "Test: COST_NORMALIZE config present"
+if grep -q 'COST_NORMALIZE' "$STATUSLINE"; then
+    pass "COST_NORMALIZE config present"
+else
+    fail "COST_NORMALIZE config missing" "COST_NORMALIZE" "not found"
+fi
+
+# Test 34: Cost weight variables present
+echo "Test: Cost weight variables present"
+if grep -q 'COST_WEIGHT_OPUS' "$STATUSLINE" && \
+   grep -q 'COST_WEIGHT_HAIKU' "$STATUSLINE" && \
+   grep -q 'COST_WEIGHT_SONNET' "$STATUSLINE"; then
+    pass "All cost weight variables present"
+else
+    fail "Cost weight variables missing" "COST_WEIGHT_OPUS/HAIKU/SONNET" "some missing"
+fi
+
+# Test 35: COST_MULT variable set in script
+echo "Test: COST_MULT variable present"
+if grep -q 'COST_MULT' "$STATUSLINE"; then
+    pass "COST_MULT variable present"
+else
+    fail "COST_MULT missing" "COST_MULT" "not found"
+fi
+
+# Test 36: COST_PREFIX variable set in script
+echo "Test: COST_PREFIX variable present"
+if grep -q 'COST_PREFIX' "$STATUSLINE"; then
+    pass "COST_PREFIX variable present"
+else
+    fail "COST_PREFIX missing" "COST_PREFIX" "not found"
+fi
+
+# Test 37: Model detection logic for Opus/Haiku/Sonnet
+echo "Test: Model cost detection logic for all three model types"
+if grep -qi 'opus' "$STATUSLINE" && grep -qi 'haiku' "$STATUSLINE" && \
+   grep -q 'COST_MULT.*COST_WEIGHT' "$STATUSLINE"; then
+    pass "Model cost detection logic present for Opus/Haiku/Sonnet"
+else
+    fail "Model cost detection incomplete" "opus+haiku branch with COST_WEIGHT" "not found"
+fi
+
+# Test 38: Config parser handles COST_NORMALIZE
+echo "Test: Config parser handles COST_NORMALIZE"
+if grep -A2 'COST_NORMALIZE)' "$STATUSLINE" | grep -q 'COST_NORMALIZE'; then
+    pass "Config parser handles COST_NORMALIZE"
+else
+    fail "Config parser missing COST_NORMALIZE case" "COST_NORMALIZE case" "not found"
+fi
+
+# Test 39: COST_PREFIX applied to BURN_DISPLAY
+echo "Test: COST_PREFIX applied to burn display"
+if grep -q 'COST_PREFIX.*LOCAL_TPM_FMT\|LOCAL_TPM_FMT.*COST_PREFIX' "$STATUSLINE"; then
+    pass "COST_PREFIX applied in burn display"
+else
+    fail "COST_PREFIX not in burn display" "COST_PREFIX in BURN_DISPLAY" "not found"
+fi
+
+# Test 40: COST_PREFIX applied to PACE_DISPLAY
+echo "Test: COST_PREFIX applied to pace display"
+if grep -q 'COST_PREFIX.*PACE\|PACE_DISPLAY.*COST_PREFIX' "$STATUSLINE"; then
+    pass "COST_PREFIX applied in pace display"
+else
+    fail "COST_PREFIX not in pace display" "COST_PREFIX in PACE_DISPLAY" "not found"
+fi
+
+# ============================================
 # Summary
 # ============================================
 
