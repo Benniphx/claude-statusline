@@ -46,6 +46,10 @@ type Config struct {
 	WorkDaysPerWeek         int           // 1-7, used for 7-day pace scaling
 	CacheDir                string        // Directory for cache files
 	Version                 string        // Current binary version
+	CostNormalize           bool          // Enable cost-normalized burn rate
+	CostWeightOpus          float64       // Cost weight for Opus models (default 5.0)
+	CostWeightSonnet        float64       // Cost weight for Sonnet models (default 1.0, baseline)
+	CostWeightHaiku         float64       // Cost weight for Haiku models (default 0.25)
 }
 
 // DefaultConfig returns configuration with sensible defaults.
@@ -56,6 +60,10 @@ func DefaultConfig() Config {
 		WorkDaysPerWeek:         5,
 		CacheDir:                "/tmp",
 		Version:                 "dev",
+		CostNormalize:           true,
+		CostWeightOpus:          5.0,
+		CostWeightSonnet:        1.0,
+		CostWeightHaiku:         0.25,
 	}
 }
 
@@ -75,7 +83,17 @@ type ModelInfo struct {
 	ShortName      string
 	DefaultContext int
 	IsLocal        bool
+	CostTier       CostTier // Model cost tier for normalization
 }
+
+// CostTier represents the pricing tier of a model.
+type CostTier int
+
+const (
+	CostTierSonnet CostTier = iota // Default/baseline
+	CostTierOpus
+	CostTierHaiku
+)
 
 // ContextDisplay holds computed context window display data.
 type ContextDisplay struct {
