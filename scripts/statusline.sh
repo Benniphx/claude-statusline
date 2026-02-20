@@ -151,6 +151,10 @@ CONFIG_FILE="$HOME/.claude-statusline.conf"
 CONTEXT_WARNING_THRESHOLD=""  # Empty = disabled (uses default color scheme)
 RATE_CACHE_TTL=15             # Seconds between API refreshes (10-120)
 WORK_DAYS_PER_WEEK=5          # 5 = Mon-Fri, 7 = all days (for 7d pace calculation)
+COST_NORMALIZE=true           # Normalize burn/pace by model cost (Sonnet = baseline)
+COST_WEIGHT_HAIKU="0.25"      # Haiku ~4x cheaper than Sonnet
+COST_WEIGHT_SONNET="1.0"      # Sonnet = baseline
+COST_WEIGHT_OPUS="5.0"        # Opus ~5x more expensive than Sonnet
 
 if [ -f "$CONFIG_FILE" ]; then
     # Source config file (only specific variables for security)
@@ -171,6 +175,26 @@ if [ -f "$CONFIG_FILE" ]; then
             WORK_DAYS_PER_WEEK)
                 if [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -ge 1 ] && [ "$value" -le 7 ]; then
                     WORK_DAYS_PER_WEEK="$value"
+                fi
+                ;;
+            COST_NORMALIZE)
+                if [ "$value" = "true" ] || [ "$value" = "false" ]; then
+                    COST_NORMALIZE="$value"
+                fi
+                ;;
+            COST_WEIGHT_HAIKU)
+                if [[ "$value" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                    COST_WEIGHT_HAIKU="$value"
+                fi
+                ;;
+            COST_WEIGHT_SONNET)
+                if [[ "$value" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                    COST_WEIGHT_SONNET="$value"
+                fi
+                ;;
+            COST_WEIGHT_OPUS)
+                if [[ "$value" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                    COST_WEIGHT_OPUS="$value"
                 fi
                 ;;
         esac
@@ -391,6 +415,23 @@ fi
 # === Extract Data ===
 CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 MODEL=$(echo "$input" | jq -r '.model.display_name // "Claude"')
+
+# Cost multiplier: normalize burn rate and pace to Sonnet-equivalent
+COST_MULT="1.0"
+COST_PREFIX=""
+if [ "${COST_NORMALIZE}" = "true" ]; then
+    if echo "$MODEL" | grep -qi "opus"; then
+        COST_MULT="$COST_WEIGHT_OPUS"
+    elif echo "$MODEL" | grep -qi "haiku"; then
+        COST_MULT="$COST_WEIGHT_HAIKU"
+    else
+        COST_MULT="$COST_WEIGHT_SONNET"
+    fi
+    if [ "$COST_MULT" != "1.0" ]; then
+        COST_PREFIX="≈"
+    fi
+fi
+
 COST=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
 DURATION_MS=$(echo "$input" | jq -r '.cost.total_duration_ms // 0')
 LINES_ADDED=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
@@ -432,7 +473,7 @@ DURATION_MIN=$((DURATION_MS / 60000))
 
 # Burn Rate
 if [ "$DURATION_MS" -gt 60000 ]; then
-    TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.1f\", ($TOTAL_TOKENS / ($DURATION_MS / 60000))}" 2>/dev/null)
+    TOKENS_PER_MIN=$(awk "BEGIN {printf \"%.1f\", ($TOTAL_TOKENS / ($DURATION_MS / 60000)) * $COST_MULT}" 2>/dev/null)
     COST_PER_HOUR=$(awk "BEGIN {printf \"%.2f\", ($COST / ($DURATION_MS / 3600000))}" 2>/dev/null)
 else
     TOKENS_PER_MIN="--"
@@ -724,8 +765,8 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
                 HOURS_SINCE_START=$(awk "BEGIN {print $SECS_SINCE_START / 3600}" 2>/dev/null)
                 PERCENT_PER_HOUR=$(awk "BEGIN {printf \"%.1f\", $FIVE_HOUR_FLT / $HOURS_SINCE_START}" 2>/dev/null)
 
-                # Pace: 20%/h = sustainable (1.0x)
-                PACE=$(awk "BEGIN {printf \"%.1f\", $PERCENT_PER_HOUR / 20}" 2>/dev/null)
+                # Pace: 20%/h = sustainable (1.0x), adjusted by model cost multiplier
+                PACE=$(awk "BEGIN {printf \"%.1f\", ($PERCENT_PER_HOUR / 20) * $COST_MULT}" 2>/dev/null)
                 PACE_INT=$(awk "BEGIN {printf \"%.0f\", $PACE * 10}" 2>/dev/null)
 
                 if [ "${PACE_INT:-0}" -lt 10 ]; then
@@ -735,7 +776,7 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
                 else
                     PACE_COLOR="$RED"     # > 1.5x = burning fast
                 fi
-                PACE_DISPLAY="${PACE}x"
+                PACE_DISPLAY="${COST_PREFIX}${PACE}x"
 
                 # Check if hitting limit before reset
                 REMAINING_PERCENT=$(awk "BEGIN {print 100 - $FIVE_HOUR_FLT}" 2>/dev/null)
@@ -892,9 +933,9 @@ if [ "$IS_SUBSCRIPTION" = true ]; then
     if [ "$LOCAL_TPM_FMT" != "--" ]; then
         if [ "$OTHER_ACTIVITY" = true ]; then
             # Show local rate with "others active" indicator
-            BURN_DISPLAY="🔥 ${MAGENTA}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET} ${YELLOW}⚡${RESET}"
+            BURN_DISPLAY="🔥 ${MAGENTA}${COST_PREFIX}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET} ${YELLOW}⚡${RESET}"
         else
-            BURN_DISPLAY="🔥 ${MAGENTA}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
+            BURN_DISPLAY="🔥 ${MAGENTA}${COST_PREFIX}${LOCAL_TPM_FMT}${RESET} ${DIM}t/m${RESET}"
         fi
     elif [ "$OTHER_ACTIVITY" = true ]; then
         # No local activity but others are active
