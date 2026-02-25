@@ -166,7 +166,7 @@ func TestRenderCost(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 120000},
 	}
 
-	result := Render(input, cfg, plat, store, r)
+	result := Render(input, cfg, plat, store, r, sonnetModel)
 	if !strings.Contains(result, "💰") {
 		t.Error("should contain session cost emoji")
 	}
@@ -174,6 +174,9 @@ func TestRenderCost(t *testing.T) {
 		t.Error("should contain daily cost emoji")
 	}
 }
+
+// sonnetModel is a default Sonnet model for tests (CostWeight=1.0, no prefix).
+var sonnetModel = types.ModelInfo{ShortName: "Sonnet 4", CostWeight: 1.0}
 
 type mockRenderer struct{}
 
@@ -238,7 +241,7 @@ func TestRenderSectionsWithBurnRate(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 300000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, sonnetModel)
 
 	// Session
 	if !strings.Contains(sections.Session, "💰") {
@@ -280,7 +283,7 @@ func TestRenderSectionsNoBurn(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.02, TotalDurationMS: 45000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, sonnetModel)
 
 	if !strings.Contains(sections.Burn, "🔥") {
 		t.Error("Burn should contain 🔥 even with no burn data")
@@ -307,7 +310,7 @@ func TestRenderSectionsZeroDuration(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0, TotalDurationMS: 0},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, sonnetModel)
 
 	if !strings.Contains(sections.Session, "$0.00") {
 		t.Errorf("Session should be $0.00, got: %s", sections.Session)
@@ -333,7 +336,7 @@ func TestRenderSectionsLegacyTokenBurn(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.75, TotalDurationMS: 300000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, sonnetModel)
 
 	// Should compute burn from legacy tokens
 	if !strings.Contains(sections.Burn, "t/m") {
@@ -398,5 +401,97 @@ func TestResolveSession(t *testing.T) {
 	}
 	if stable2 {
 		t.Error("stable = true, want false")
+	}
+}
+
+// --- Cost normalization tests ---
+
+func TestRenderSectionsCostNormalizedOpus(t *testing.T) {
+	r := &mockRenderer{}
+	store := newMockCache()
+	plat := &mockPlatform{sessionID: "s1", stable: true}
+	cfg := types.DefaultConfig() // CostNormalize=true
+	opusModel := types.ModelInfo{ShortName: "Opus 4.6", CostWeight: 5.0}
+
+	// 90K tokens over 5 minutes → 18K TPM, with 5x multiplier → 90K normalized
+	input := types.Input{
+		ContextWindow: types.ContextWindow{
+			ContextWindowSize: 200000,
+			CurrentUsage: types.CurrentUsage{
+				InputTokens:              80000,
+				CacheCreationInputTokens: 5000,
+				CacheReadInputTokens:     5000,
+			},
+		},
+		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 300000},
+	}
+
+	sections := RenderSections(input, cfg, plat, store, r, opusModel)
+
+	// Burn should have approx prefix
+	if !strings.Contains(sections.Burn, "\u2248") {
+		t.Errorf("Opus burn should have approx prefix, got: %s", sections.Burn)
+	}
+	// TPM should be multiplied by 5
+	if !strings.Contains(sections.Burn, "90000") {
+		t.Errorf("Opus burn should show 90K (18K*5), got: %s", sections.Burn)
+	}
+}
+
+func TestRenderSectionsCostNormalizedHaiku(t *testing.T) {
+	r := &mockRenderer{}
+	store := newMockCache()
+	plat := &mockPlatform{sessionID: "s1", stable: true}
+	cfg := types.DefaultConfig() // CostNormalize=true
+	haikuModel := types.ModelInfo{ShortName: "Haiku 3.5", CostWeight: 0.25}
+
+	// 90K tokens over 5 min → 18K TPM, with 0.25x → 4500
+	input := types.Input{
+		ContextWindow: types.ContextWindow{
+			ContextWindowSize: 200000,
+			CurrentUsage: types.CurrentUsage{
+				InputTokens:              80000,
+				CacheCreationInputTokens: 5000,
+				CacheReadInputTokens:     5000,
+			},
+		},
+		Cost: types.Cost{TotalCostUSD: 0.05, TotalDurationMS: 300000},
+	}
+
+	sections := RenderSections(input, cfg, plat, store, r, haikuModel)
+
+	if !strings.Contains(sections.Burn, "\u2248") {
+		t.Errorf("Haiku burn should have approx prefix, got: %s", sections.Burn)
+	}
+	if !strings.Contains(sections.Burn, "4500") {
+		t.Errorf("Haiku burn should show 4500 (18K*0.25), got: %s", sections.Burn)
+	}
+}
+
+func TestRenderSectionsCostNormalizeDisabled(t *testing.T) {
+	r := &mockRenderer{}
+	store := newMockCache()
+	plat := &mockPlatform{sessionID: "s1", stable: true}
+	cfg := types.DefaultConfig()
+	cfg.CostNormalize = false
+	opusModel := types.ModelInfo{ShortName: "Opus 4.6", CostWeight: 5.0}
+
+	input := types.Input{
+		ContextWindow: types.ContextWindow{
+			ContextWindowSize: 200000,
+			CurrentUsage: types.CurrentUsage{
+				InputTokens:              80000,
+				CacheCreationInputTokens: 5000,
+				CacheReadInputTokens:     5000,
+			},
+		},
+		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 300000},
+	}
+
+	sections := RenderSections(input, cfg, plat, store, r, opusModel)
+
+	// No approx prefix when normalization is disabled
+	if strings.Contains(sections.Burn, "\u2248") {
+		t.Errorf("Disabled normalization should not have approx prefix, got: %s", sections.Burn)
 	}
 }

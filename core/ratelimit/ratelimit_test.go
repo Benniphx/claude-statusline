@@ -119,6 +119,12 @@ func (m *mockPlatform) GetStableSessionID() (string, bool) {
 	return "test-session", true
 }
 
+// sonnetModel is a default Sonnet model for tests (CostWeight=1.0, no prefix).
+var sonnetModel = types.ModelInfo{ShortName: "Sonnet 4", CostWeight: 1.0}
+
+// noCostNorm is a CostNorm with Mult=1.0, no prefix (for existing tests).
+var noCostNorm = types.CostNorm{Mult: 1.0}
+
 // mockRenderer implements ports.Renderer for ratelimit render tests.
 type mockRenderer struct{}
 
@@ -245,7 +251,7 @@ func TestRenderSectionsSuccess(t *testing.T) {
 		Cost: types.Cost{TotalDurationMS: 300000}, // 5 min
 	}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, sonnetModel)
 
 	// FiveHour section
 	if !strings.Contains(sections.FiveHour, "5h:") {
@@ -285,7 +291,7 @@ func TestRenderSectionsError(t *testing.T) {
 	plat := &mockPlatform{}
 	input := types.Input{}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, sonnetModel)
 
 	if !strings.Contains(sections.FiveHour, "5h:") || !strings.Contains(sections.FiveHour, "--") {
 		t.Errorf("FiveHour on error should be '5h: --', got: %s", sections.FiveHour)
@@ -329,7 +335,7 @@ func TestRenderSectionsNoBurn(t *testing.T) {
 		Cost: types.Cost{TotalDurationMS: 45000},
 	}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, sonnetModel)
 
 	if !strings.Contains(sections.Burn, "--") {
 		t.Errorf("Burn should show '--' with short duration, got: %s", sections.Burn)
@@ -401,7 +407,7 @@ func TestPaceColorize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := paceColorize(tt.pace, r)
+		got := paceColorize(tt.pace, "", r)
 		if got != tt.want {
 			t.Errorf("paceColorize(%f) = %q, want %q", tt.pace, got, tt.want)
 		}
@@ -419,7 +425,7 @@ func TestRenderFiveHourWithPace(t *testing.T) {
 		HittingLimit: false,
 	}
 
-	result := renderFiveHour(data, pace, r)
+	result := renderFiveHour(data, pace, noCostNorm, r)
 	if !strings.Contains(result, "50%") {
 		t.Errorf("should contain '50%%', got: %s", result)
 	}
@@ -439,7 +445,7 @@ func TestRenderFiveHourHittingLimit(t *testing.T) {
 		HittingLimit: true,
 	}
 
-	result := renderFiveHour(data, pace, r)
+	result := renderFiveHour(data, pace, noCostNorm, r)
 	if !strings.Contains(result, "⚠️") {
 		t.Errorf("should contain ⚠️ when hitting limit, got: %s", result)
 	}
@@ -449,7 +455,7 @@ func TestRenderBurnWithTPM(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 15000}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, noCostNorm, r)
 	if !strings.Contains(result, "15.0K") {
 		t.Errorf("should format 15000 TPM as '15.0K', got: %s", result)
 	}
@@ -462,7 +468,7 @@ func TestRenderBurnNone(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 0}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, noCostNorm, r)
 	if !strings.Contains(result, "--") {
 		t.Errorf("should show '--' with no TPM, got: %s", result)
 	}
@@ -472,7 +478,7 @@ func TestRenderBurnHighActivity(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 5000, IsHighActivity: true}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, noCostNorm, r)
 	if !strings.Contains(result, "⚡") {
 		t.Errorf("should contain ⚡ for high activity, got: %s", result)
 	}
@@ -482,7 +488,7 @@ func TestRenderBurnHighActivityNoLocal(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 0, IsHighActivity: true}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, noCostNorm, r)
 	if !strings.Contains(result, "⚡") {
 		t.Errorf("should contain ⚡ for high activity even without local TPM, got: %s", result)
 	}
@@ -501,7 +507,7 @@ func TestRenderSevenDayWithPace(t *testing.T) {
 		SevenDayPace: 0.8,
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, noCostNorm, r)
 	if !strings.Contains(result, "25%") {
 		t.Errorf("should contain '25%%', got: %s", result)
 	}
@@ -520,7 +526,7 @@ func TestRenderSevenDayOverPace(t *testing.T) {
 		SevenDayPace: 1.5,
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, noCostNorm, r)
 	if !strings.Contains(result, "⚠️") {
 		t.Errorf("should contain ⚠️ when 7d pace > 1.0, got: %s", result)
 	}
@@ -537,8 +543,171 @@ func TestRenderSevenDayWithResetDays(t *testing.T) {
 		SevenDayResetFmt: "→2d",
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, noCostNorm, r)
 	if !strings.Contains(result, "→2d") {
 		t.Errorf("should contain '→2d', got: %s", result)
+	}
+}
+
+// TestWarningSemantics documents the intentionally different semantics of the two ⚠️ indicators:
+//
+//   - 5h ⚠️ (HittingLimit): raw capacity warning — fires when the user will exhaust the
+//     raw rate-limit window before it resets, regardless of model. This is a hard technical
+//     limit that is model-independent.
+//
+//   - 7d ⚠️: cost-normalized budget warning — fires when the cost-normalized pace exceeds
+//     1.0x sustainable. An Opus user at 21% raw weekly usage triggers this (0.21 × 5.0 = 1.05)
+//     because they are spending 5× as much budget per token. This is intentional: the 7d window
+//     reflects budget sustainability, not raw capacity.
+func TestWarningSemantics(t *testing.T) {
+	r := &mockRenderer{}
+	opusCN := types.CostNorm{Mult: 5.0, Prefix: "\u2248"}
+
+	// 5h ⚠️ is driven by raw HittingLimit — cost normalization has no effect.
+	// Opus user at 21% with HittingLimit=false should NOT get 5h ⚠️.
+	fiveHourData := types.RateLimitData{FiveHourPercent: 21.0}
+	fiveHourPace := types.PaceInfo{FiveHourPace: 0.21, HittingLimit: false}
+	result5h := renderFiveHour(fiveHourData, fiveHourPace, opusCN, r)
+	if strings.Contains(result5h, "⚠️") {
+		t.Errorf("5h ⚠️ should NOT fire when HittingLimit=false, even for Opus; got: %s", result5h)
+	}
+
+	// 5h ⚠️ fires only when HittingLimit=true (raw capacity exhaustion).
+	fiveHourPaceHitting := types.PaceInfo{FiveHourPace: 4.0, HittingLimit: true}
+	result5hHitting := renderFiveHour(fiveHourData, fiveHourPaceHitting, opusCN, r)
+	if !strings.Contains(result5hHitting, "⚠️") {
+		t.Errorf("5h ⚠️ should fire when HittingLimit=true; got: %s", result5hHitting)
+	}
+
+	// 7d ⚠️ uses cost-normalized pace: Opus at 21% raw → pace=0.21, normalized=1.05 → ⚠️.
+	// This is intentional: the user is exceeding sustainable *budget* consumption.
+	sevenDayData := types.RateLimitData{SevenDayPercent: 21.0}
+	sevenDayPace := types.PaceInfo{SevenDayPace: 0.21}
+	result7d := renderSevenDay(sevenDayData, sevenDayPace, opusCN, r)
+	if !strings.Contains(result7d, "⚠️") {
+		t.Errorf("7d ⚠️ should fire for Opus at 21%% raw (normalized pace 1.05 > 1.0); got: %s", result7d)
+	}
+
+	// Sonnet at 21% raw → pace=0.21, Mult=1.0, normalized=0.21 → no ⚠️.
+	sevenDayPaceSonnet := types.PaceInfo{SevenDayPace: 0.21}
+	result7dSonnet := renderSevenDay(sevenDayData, sevenDayPaceSonnet, noCostNorm, r)
+	if strings.Contains(result7dSonnet, "⚠️") {
+		t.Errorf("7d ⚠️ should NOT fire for Sonnet at 21%% raw (normalized pace 0.21 < 1.0); got: %s", result7dSonnet)
+	}
+}
+
+// --- Cost normalization tests ---
+
+func TestRenderBurnCostNormalized(t *testing.T) {
+	r := &mockRenderer{}
+
+	// Opus: 5x multiplier → 10000 TPM * 5 = 50000 normalized
+	opusCN := types.CostNorm{Mult: 5.0, Prefix: "\u2248"}
+	burn := types.BurnInfo{LocalTPM: 10000}
+	result := renderBurn(burn, opusCN, r)
+	if !strings.Contains(result, "50.0K") {
+		t.Errorf("Opus burn should show 50.0K (10K*5), got: %s", result)
+	}
+	if !strings.Contains(result, "\u2248") {
+		t.Errorf("Opus burn should have approx prefix, got: %s", result)
+	}
+
+	// Haiku: 0.25x multiplier → 10000 * 0.25 = 2500 → rendered as "2.5K"
+	haikuCN := types.CostNorm{Mult: 0.25, Prefix: "\u2248"}
+	result2 := renderBurn(burn, haikuCN, r)
+	if !strings.Contains(result2, "2.5K") {
+		t.Errorf("Haiku burn should show 2.5K (10K*0.25), got: %s", result2)
+	}
+}
+
+func TestPaceColorizeWithPrefix(t *testing.T) {
+	r := &mockRenderer{}
+
+	// With prefix
+	got := paceColorize(2.5, "\u2248", r)
+	if !strings.Contains(got, "\u2248") {
+		t.Errorf("should contain approx prefix, got: %q", got)
+	}
+	if !strings.Contains(got, "2.5x") {
+		t.Errorf("should contain pace value, got: %q", got)
+	}
+
+	// Without prefix
+	got2 := paceColorize(0.8, "", r)
+	if strings.Contains(got2, "\u2248") {
+		t.Errorf("should not contain approx prefix, got: %q", got2)
+	}
+}
+
+func TestRenderFiveHourCostNormalized(t *testing.T) {
+	r := &mockRenderer{}
+	opusCN := types.CostNorm{Mult: 5.0, Prefix: "\u2248"}
+
+	data := types.RateLimitData{FiveHourPercent: 50.0}
+	pace := types.PaceInfo{FiveHourPace: 0.3} // 0.3 * 5.0 = 1.5x
+
+	result := renderFiveHour(data, pace, opusCN, r)
+	if !strings.Contains(result, "\u22481.5x") {
+		t.Errorf("Opus 5h pace should show approx 1.5x (0.3*5), got: %s", result)
+	}
+}
+
+func TestRenderSevenDayCostNormalized(t *testing.T) {
+	r := &mockRenderer{}
+	opusCN := types.CostNorm{Mult: 5.0, Prefix: "\u2248"}
+
+	data := types.RateLimitData{SevenDayPercent: 25.0}
+	pace := types.PaceInfo{SevenDayPace: 0.3} // 0.3 * 5.0 = 1.5x → over 1.0 → warning
+
+	result := renderSevenDay(data, pace, opusCN, r)
+	if !strings.Contains(result, "\u22481.5x") {
+		t.Errorf("Opus 7d pace should show approx 1.5x (0.3*5), got: %s", result)
+	}
+	// Warning should appear because normalized pace > 1.0
+	if !strings.Contains(result, "⚠️") {
+		t.Errorf("should contain ⚠️ when normalized pace > 1.0, got: %s", result)
+	}
+}
+
+func TestRenderSectionsCostNormalizedOpus(t *testing.T) {
+	store := newMockCache()
+	r := &mockRenderer{}
+
+	now := time.Now()
+	resp := types.RateLimitResponse{
+		FiveHour: types.RateLimitWindow{
+			Utilization: 50,
+			ResetsAt:    now.Add(3 * time.Hour).Format(time.RFC3339),
+		},
+		SevenDay: types.RateLimitWindow{
+			Utilization: 25,
+			ResetsAt:    now.Add(5 * 24 * time.Hour).Format(time.RFC3339),
+		},
+	}
+	raw, _ := json.Marshal(resp)
+	store.files["/tmp/"+cacheName] = raw
+	store.fresh["/tmp/"+cacheName] = true
+
+	creds := types.Credentials{OAuthToken: "token"}
+	cfg := types.DefaultConfig() // CostNormalize=true
+	plat := &mockPlatform{}
+	opusModel := types.ModelInfo{ShortName: "Opus 4.6", CostWeight: 5.0}
+
+	input := types.Input{
+		ContextWindow: types.ContextWindow{
+			CurrentUsage: types.CurrentUsage{
+				InputTokens:              80000,
+				CacheCreationInputTokens: 5000,
+				CacheReadInputTokens:     5000,
+			},
+		},
+		Cost: types.Cost{TotalDurationMS: 300000},
+	}
+
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, opusModel)
+
+	// Burn should have approx prefix (Opus = 5x)
+	if !strings.Contains(sections.Burn, "\u2248") {
+		t.Errorf("Opus burn should have approx prefix, got: %s", sections.Burn)
 	}
 }

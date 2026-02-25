@@ -46,6 +46,10 @@ type Config struct {
 	WorkDaysPerWeek         int           // 1-7, used for 7-day pace scaling
 	CacheDir                string        // Directory for cache files
 	Version                 string        // Current binary version
+	CostNormalize           bool          // Normalize burn rate/pace by model cost weight
+	CostWeightHaiku         float64       // Cost weight for Haiku models (default 0.25)
+	CostWeightSonnet        float64       // Cost weight for Sonnet models (default 1.0)
+	CostWeightOpus          float64       // Cost weight for Opus models (default 5.0)
 }
 
 // DefaultConfig returns configuration with sensible defaults.
@@ -56,6 +60,10 @@ func DefaultConfig() Config {
 		WorkDaysPerWeek:         5,
 		CacheDir:                "/tmp",
 		Version:                 "dev",
+		CostNormalize:           true,
+		CostWeightHaiku:         0.25,
+		CostWeightSonnet:        1.0,
+		CostWeightOpus:          5.0,
 	}
 }
 
@@ -75,6 +83,7 @@ type ModelInfo struct {
 	ShortName      string
 	DefaultContext int
 	IsLocal        bool
+	CostWeight     float64 // Cost weight for normalization (0 = unknown/use 1.0)
 }
 
 // ContextDisplay holds computed context window display data.
@@ -111,10 +120,10 @@ type RateLimitData struct {
 
 // PaceInfo holds calculated pace information.
 type PaceInfo struct {
-	FiveHourPace    float64
-	SevenDayPace    float64
-	HittingLimit    bool
-	ResetInfo       string // e.g., "→45m @14:30"
+	FiveHourPace     float64
+	SevenDayPace     float64
+	HittingLimit     bool
+	ResetInfo        string // e.g., "→45m @14:30"
 	SevenDayResetFmt string
 }
 
@@ -131,4 +140,26 @@ type CostDisplay struct {
 	DailyCost   float64
 	CostPerHour float64
 	SessionID   string
+}
+
+// CostNorm holds resolved cost normalization parameters.
+type CostNorm struct {
+	Mult   float64 // Cost multiplier (e.g. 5.0 for Opus)
+	Prefix string  // "≈" when Mult != 1.0, "" otherwise
+}
+
+// ResolveCostNorm returns cost normalization parameters based on config and model info.
+func ResolveCostNorm(cfg Config, modelInfo ModelInfo) CostNorm {
+	if !cfg.CostNormalize {
+		return CostNorm{Mult: 1.0}
+	}
+	w := modelInfo.CostWeight
+	if w <= 0 {
+		w = 1.0
+	}
+	var prefix string
+	if w != 1.0 {
+		prefix = "\u2248" // ≈
+	}
+	return CostNorm{Mult: w, Prefix: prefix}
 }

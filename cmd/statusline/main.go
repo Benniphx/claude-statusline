@@ -69,7 +69,7 @@ func main() {
 
 	// Resolve model info
 	ollamaClient := model.NewOllamaClient(cfg.CacheDir, store)
-	modelInfo := model.Resolve(input.Model.ModelID, input.Model.DisplayName, ollamaClient, cfg.CacheDir)
+	modelInfo := model.Resolve(input.Model.ModelID, input.Model.DisplayName, ollamaClient, cfg.CacheDir, cfg)
 
 	// Calculate context display
 	ctxDisplay := corecontext.Calculate(input, modelInfo, cfg)
@@ -97,10 +97,10 @@ func main() {
 
 	// 3. Rate limit sections (OAuth) or Cost sections (API key)
 	if creds.HasOAuth() {
-		rate := ratelimit.RenderSections(input, creds, cfg, plat, store, api, rend)
+		rate := ratelimit.RenderSections(input, creds, cfg, plat, store, api, rend, modelInfo)
 		sections = append(sections, rate.FiveHour, rate.Burn, rate.SevenDay)
 	} else {
-		cs := cost.RenderSections(input, cfg, plat, store, rend)
+		cs := cost.RenderSections(input, cfg, plat, store, rend, modelInfo)
 		sections = append(sections, cs.Session, cs.Daily, cs.Burn)
 	}
 

@@ -14,8 +14,33 @@ import (
 const defaultClaudeContext = 200000
 const defaultLocalContext = 32768
 
+// ModelFamily represents the pricing tier of a Claude model.
+type ModelFamily int
+
+const (
+	FamilyUnknown ModelFamily = iota
+	FamilyHaiku
+	FamilySonnet
+	FamilyOpus
+)
+
+// CostWeight returns the cost weight for a model family from config.
+func CostWeight(family ModelFamily, cfg types.Config) float64 {
+	switch family {
+	case FamilyHaiku:
+		return cfg.CostWeightHaiku
+	case FamilySonnet:
+		return cfg.CostWeightSonnet
+	case FamilyOpus:
+		return cfg.CostWeightOpus
+	default:
+		return 1.0
+	}
+}
+
 // Resolve determines the short name, default context size, and locality of a model.
-func Resolve(modelID, displayName string, ollama ports.OllamaClient, cacheDir string) types.ModelInfo {
+// The cfg parameter is used to look up user-configured cost weights.
+func Resolve(modelID, displayName string, ollama ports.OllamaClient, cacheDir string, cfg types.Config) types.ModelInfo {
 	lower := strings.ToLower(modelID)
 
 	// Check Ollama models first
@@ -33,15 +58,18 @@ func Resolve(modelID, displayName string, ollama ports.OllamaClient, cacheDir st
 	}
 
 	// Claude model patterns
-	if short, ok := matchClaude(lower); ok {
+	if short, family, ok := matchClaude(lower); ok {
 		return types.ModelInfo{
 			ShortName:      short,
 			DefaultContext: defaultClaudeContext,
 			IsLocal:        false,
+			CostWeight:     CostWeight(family, cfg),
 		}
 	}
 
-	// Fallback: strip "Claude " prefix from display name
+	// Fallback: try to detect family from display name
+	family := detectFamily(strings.ToLower(displayName))
+
 	name := displayName
 	if strings.HasPrefix(name, "Claude ") {
 		name = strings.TrimPrefix(name, "Claude ")
@@ -54,32 +82,50 @@ func Resolve(modelID, displayName string, ollama ports.OllamaClient, cacheDir st
 		ShortName:      name,
 		DefaultContext: defaultClaudeContext,
 		IsLocal:        false,
+		CostWeight:     CostWeight(family, cfg),
 	}
 }
 
-func matchClaude(lower string) (string, bool) {
+func matchClaude(lower string) (string, ModelFamily, bool) {
 	switch {
 	case strings.Contains(lower, "opus-4-5") || strings.Contains(lower, "opus-4.5"):
-		return "Opus 4.5", true
+		return "Opus 4.5", FamilyOpus, true
 	case strings.Contains(lower, "opus-4-6") || strings.Contains(lower, "opus-4.6"):
-		return "Opus 4.6", true
+		return "Opus 4.6", FamilyOpus, true
 	case strings.Contains(lower, "sonnet-4-5") || strings.Contains(lower, "sonnet-4.5"):
-		return "Sonnet 4.5", true
+		return "Sonnet 4.5", FamilySonnet, true
+	case strings.Contains(lower, "sonnet-4-6") || strings.Contains(lower, "sonnet-4.6"):
+		return "Sonnet 4.6", FamilySonnet, true
 	// 3.5 patterns before generic 4/3 to avoid false matches
 	case strings.Contains(lower, "3-5-sonnet") || strings.Contains(lower, "sonnet-3.5") || strings.Contains(lower, "sonnet-3-5"):
-		return "Sonnet 3.5", true
+		return "Sonnet 3.5", FamilySonnet, true
 	case strings.Contains(lower, "sonnet-4"):
-		return "Sonnet 4", true
+		return "Sonnet 4", FamilySonnet, true
 	case strings.Contains(lower, "3-opus") || strings.Contains(lower, "opus-3"):
-		return "Opus 3", true
+		return "Opus 3", FamilyOpus, true
+	case strings.Contains(lower, "opus-4"):
+		return "Opus 4", FamilyOpus, true
 	case strings.Contains(lower, "3-5-haiku") || strings.Contains(lower, "haiku-3.5") || strings.Contains(lower, "haiku-3-5"):
-		return "Haiku 3.5", true
+		return "Haiku 3.5", FamilyHaiku, true
 	case strings.Contains(lower, "3-haiku") || strings.Contains(lower, "haiku-3"):
-		return "Haiku 3", true
+		return "Haiku 3", FamilyHaiku, true
 	case strings.Contains(lower, "haiku-4"):
-		return "Haiku 4", true
+		return "Haiku 4", FamilyHaiku, true
 	}
-	return "", false
+	return "", FamilyUnknown, false
+}
+
+func detectFamily(lower string) ModelFamily {
+	switch {
+	case strings.Contains(lower, "opus"):
+		return FamilyOpus
+	case strings.Contains(lower, "haiku"):
+		return FamilyHaiku
+	case strings.Contains(lower, "sonnet"):
+		return FamilySonnet
+	default:
+		return FamilyUnknown
+	}
 }
 
 func resolveOllama(modelID string, ollama ports.OllamaClient, cacheDir string) types.ModelInfo {

@@ -84,3 +84,70 @@ WORK_DAYS_PER_WEEK=3
 		t.Errorf("WorkDaysPerWeek = %d, want 3", cfg.WorkDaysPerWeek)
 	}
 }
+
+func TestParseCostNormalization(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config")
+	os.WriteFile(path, []byte(`
+COST_NORMALIZE=false
+COST_WEIGHT_HAIKU=0.20
+COST_WEIGHT_SONNET=1.5
+COST_WEIGHT_OPUS=8.0
+`), 0o644)
+
+	cfg := types.DefaultConfig()
+	parseFile(path, &cfg)
+
+	if cfg.CostNormalize {
+		t.Error("CostNormalize should be false")
+	}
+	if cfg.CostWeightHaiku != 0.20 {
+		t.Errorf("CostWeightHaiku = %f, want 0.20", cfg.CostWeightHaiku)
+	}
+	if cfg.CostWeightSonnet != 1.5 {
+		t.Errorf("CostWeightSonnet = %f, want 1.5", cfg.CostWeightSonnet)
+	}
+	if cfg.CostWeightOpus != 8.0 {
+		t.Errorf("CostWeightOpus = %f, want 8.0", cfg.CostWeightOpus)
+	}
+}
+
+func TestParseCostNormalizeTrue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config")
+	os.WriteFile(path, []byte(`
+COST_NORMALIZE=true
+`), 0o644)
+
+	cfg := types.DefaultConfig()
+	cfg.CostNormalize = false // Override default to test parsing
+	parseFile(path, &cfg)
+
+	if !cfg.CostNormalize {
+		t.Error("CostNormalize should be true")
+	}
+}
+
+func TestParseCostWeightInvalidIgnored(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config")
+	os.WriteFile(path, []byte(`
+COST_WEIGHT_OPUS=0
+COST_WEIGHT_HAIKU=-1
+COST_WEIGHT_SONNET=abc
+`), 0o644)
+
+	cfg := types.DefaultConfig()
+	parseFile(path, &cfg)
+
+	// Invalid values should not change defaults
+	if cfg.CostWeightOpus != 5.0 {
+		t.Errorf("CostWeightOpus = %f, want 5.0 (default)", cfg.CostWeightOpus)
+	}
+	if cfg.CostWeightHaiku != 0.25 {
+		t.Errorf("CostWeightHaiku = %f, want 0.25 (default)", cfg.CostWeightHaiku)
+	}
+	if cfg.CostWeightSonnet != 1.0 {
+		t.Errorf("CostWeightSonnet = %f, want 1.0 (default)", cfg.CostWeightSonnet)
+	}
+}

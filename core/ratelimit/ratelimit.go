@@ -72,7 +72,7 @@ func parseResponse(resp *types.RateLimitResponse) (types.RateLimitData, error) {
 }
 
 // RenderSections produces the three rate limit sections for assembly by main.go.
-func RenderSections(input types.Input, creds types.Credentials, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, api ports.APIClient, r ports.Renderer) RateSections {
+func RenderSections(input types.Input, creds types.Credentials, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, api ports.APIClient, r ports.Renderer, modelInfo types.ModelInfo) RateSections {
 	data, err := Load(creds, cfg, store, api)
 	if err != nil {
 		return RateSections{
@@ -82,29 +82,35 @@ func RenderSections(input types.Input, creds types.Credentials, cfg types.Config
 		}
 	}
 
+	cn := types.ResolveCostNorm(cfg, modelInfo)
+
 	pace := CalculatePace(data, cfg, plat)
 	localBurn := CalculateBurnRate(input, cfg)
 	globalBurn := LoadBurnRate(cfg, store)
 	burn := MergeLocalGlobal(localBurn, globalBurn)
 
 	return RateSections{
-		FiveHour: renderFiveHour(data, pace, r),
-		Burn:     renderBurn(burn, r),
-		SevenDay: renderSevenDay(data, pace, r),
+		FiveHour: renderFiveHour(data, pace, cn, r),
+		Burn:     renderBurn(burn, cn, r),
+		SevenDay: renderSevenDay(data, pace, cn, r),
 	}
 }
 
-func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, r ports.Renderer) string {
+func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, cn types.CostNorm, r ports.Renderer) string {
 	fivePct := int(math.Round(data.FiveHourPercent))
 	bar := r.MakeBar(fivePct, 8)
 	rateDisplay := r.Colorize(fmt.Sprintf("%d%%", fivePct), fivePct)
 
-	// Pace
+	// Pace (cost-normalized)
 	if pace.FiveHourPace > 0 {
-		rateDisplay += " " + paceColorize(pace.FiveHourPace, r)
+		normalizedPace := pace.FiveHourPace * cn.Mult
+		rateDisplay += " " + paceColorize(normalizedPace, cn.Prefix, r)
 	}
 
-	// Hitting limit warning
+	// Hitting limit warning (raw capacity): fires when the user will exhaust the
+	// raw 5h window before it resets. This is model-independent — the rate limit
+	// is a hard technical cap unrelated to model cost. Cost normalization is
+	// intentionally not applied here.
 	if pace.HittingLimit {
 		rateDisplay += " " + r.Color("⚠️", render.Red)
 	}
@@ -117,11 +123,11 @@ func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, r ports.Rende
 	return fmt.Sprintf("5h: %s %s", bar, rateDisplay)
 }
 
-func renderBurn(burn types.BurnInfo, r ports.Renderer) string {
-	localTPM := int(burn.LocalTPM)
+func renderBurn(burn types.BurnInfo, cn types.CostNorm, r ports.Renderer) string {
+	normalizedTPM := int(math.Round(burn.LocalTPM * cn.Mult))
 
-	if localTPM > 0 {
-		tpmStr := r.FormatTokensF(localTPM)
+	if normalizedTPM > 0 {
+		tpmStr := cn.Prefix + r.FormatTokensF(normalizedTPM)
 		display := fmt.Sprintf("🔥 %s %s", r.Color(tpmStr, render.Magenta), r.Dim("t/m"))
 		if burn.IsHighActivity {
 			display += " " + r.Color("⚡", render.Yellow)
@@ -136,18 +142,23 @@ func renderBurn(burn types.BurnInfo, r ports.Renderer) string {
 	return "🔥 " + r.Dim("--")
 }
 
-func renderSevenDay(data types.RateLimitData, pace types.PaceInfo, r ports.Renderer) string {
+func renderSevenDay(data types.RateLimitData, pace types.PaceInfo, cn types.CostNorm, r ports.Renderer) string {
 	sevenPct := int(math.Round(data.SevenDayPercent))
 	bar := r.MakeBar(sevenPct, 8)
 	display := r.Colorize(fmt.Sprintf("%d%%", sevenPct), sevenPct)
 
-	// Pace
+	// Pace (cost-normalized)
 	if pace.SevenDayPace > 0 {
-		display += " " + paceColorize(pace.SevenDayPace, r)
+		normalizedPace := pace.SevenDayPace * cn.Mult
+		display += " " + paceColorize(normalizedPace, cn.Prefix, r)
 	}
 
-	// 7-day warning (pace > 1.0)
-	if pace.SevenDayPace > 1.0 {
+	// 7-day warning (cost-normalized budget): fires when the cost-normalized pace
+	// exceeds 1.0x sustainable. Unlike the 5h ⚠️, this reflects *budget* sustainability
+	// rather than raw capacity: an Opus user at 21% raw triggers this (0.21 × 5.0 = 1.05)
+	// because they are spending faster than their weekly budget allows. A Sonnet user at
+	// 21% raw (Mult=1.0) would not trigger it.
+	if pace.SevenDayPace*cn.Mult > 1.0 {
 		display += " " + r.Color("⚠️", render.Red)
 	}
 
@@ -169,8 +180,8 @@ func Render(creds types.Credentials, cfg types.Config, plat ports.PlatformInfo, 
 	return fmt.Sprintf("5h: %s", r.Colorize(fmt.Sprintf("%d%%", fivePct), fivePct))
 }
 
-func paceColorize(pace float64, r ports.Renderer) string {
-	text := fmt.Sprintf("%.1fx", pace)
+func paceColorize(pace float64, prefix string, r ports.Renderer) string {
+	text := fmt.Sprintf("%s%.1fx", prefix, pace)
 	switch {
 	case pace < 1.0:
 		return r.Color(text, render.Green)
