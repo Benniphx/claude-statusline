@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.1.1] - 2026-02-25
+
+### Fixed
+- Update check now correctly uses `Benniphx/claude-statusline` instead of an internal marketplace repo
+
+## [4.1.0] - 2026-02-25
+
+### Added
+- Cost-normalized burn rate and pace display
+
 ## [4.0.0] - 2026-02-12
 
 ### Added
