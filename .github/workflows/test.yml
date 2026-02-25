@@ -49,3 +49,18 @@ jobs:
 
       - name: Run ShellCheck on install.sh
         run: shellcheck scripts/install.sh || true
+
+  check-no-private-context:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for private/work strings
+        run: |
+          PATTERNS=$(grep -v '^#' .forbidden-strings | grep -v '^$' | tr '\n' '|' | sed 's/|$//')
+          if git grep -rEi "$PATTERNS" -- '*.go' '*.sh' '*.md' '*.json' '*.yml' '*.yaml' ':!.forbidden-strings'; then
+            echo "❌ Private/work context found! Remove before pushing."
+            exit 1
+          fi
+          echo "✅ No private context found."

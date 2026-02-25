@@ -1,0 +1,8 @@
+# Strings that must not appear in this public repo.
+# One pattern per line (grep -Ei compatible).
+# Do NOT add company names here — keep this file generic.
+# The patterns below catch internal identifiers without naming them explicitly.
+atlassian\.net
+/browse/[A-Z]+-[0-9]+
+-claude-marketplace
+gmbh/
