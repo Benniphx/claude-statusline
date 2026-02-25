@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.1.0] - 2026-02-25
+
+### Added
+- Cost-normalized burn rate and pace: Opus usage shows ~5x higher effective cost, Haiku ~4x lower
+- New config keys: `COST_NORMALIZE` (default: true), `COST_WEIGHT_HAIKU` (0.25), `COST_WEIGHT_SONNET` (1.0), `COST_WEIGHT_OPUS` (5.0)
+- Model family detection: haiku/sonnet/opus patterns including sonnet-4-6 and opus-4
+- `≈` prefix shown when cost multiplier differs from 1.0
+
+### Changed
+- Burn rate and pace values are cost-normalized by default
+- Users upgrading from v4.0.0: burn/pace numbers will change — Opus appears higher, Haiku lower
+- Set `COST_NORMALIZE=false` to restore previous behavior
+
+### Fixed
+- math.Round instead of int truncation for Haiku TPM (was suppressing low values)
+- sonnet-4-6 and opus-4 model patterns now correctly detected
+
 ## [4.0.0] - 2026-02-12
 
 ### Added
