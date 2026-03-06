@@ -301,14 +301,14 @@ rm -f "$TEST_UPDATE_CACHE"
 # Install Script Tests
 # ============================================
 
-INSTALL_SCRIPT="$PROJECT_ROOT/scripts/install.sh"
+INSTALL_SCRIPT="$PROJECT_ROOT/scripts/setup.sh"
 
 # Test 17: Install script exists and is executable
 echo "Test: Install script exists and is executable"
 if [ -x "$INSTALL_SCRIPT" ]; then
-    pass "install.sh is executable"
+    pass "setup.sh is executable"
 else
-    fail "install.sh should be executable" "executable" "not executable"
+    fail "setup.sh should be executable" "executable" "not executable"
 fi
 
 # Test 18: Install script creates settings.json

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.1.2] - 2026-03-06
+
+### Fixed
+- Rename `scripts/install.sh` to `scripts/setup.sh` to match the reference in `hooks/hooks.json`
+
 ## [4.1.1] - 2026-02-25
 
 ### Fixed
