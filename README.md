@@ -274,6 +274,16 @@ Add to `~/.claude/settings.json`:
 
 ---
 
+## Known Issues
+
+### 5h/7d values frozen (since ~Feb 2026)
+
+The `api/oauth/usage` endpoint returns persistent HTTP 429. This is a server-side issue at Anthropic — not a bug here. The last fetched values remain visible until Anthropic fixes it.
+
+See [`docs/known-issues.md`](docs/known-issues.md) for details and a fixture test to detect when it's resolved. Upstream: [anthropics/claude-code#30930](https://github.com/anthropics/claude-code/issues/30930)
+
+---
+
 ## Troubleshooting
 
 Run `/statusline:config` in Claude Code to check:
