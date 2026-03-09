@@ -1,5 +1,11 @@
 # Claude Code Statusline
 
+> [!WARNING]
+> **5h/7d values currently frozen (Anthropic-side bug)**
+> The `api/oauth/usage` endpoint returns HTTP 429 persistently since ~Feb 2026.
+> This affects all Claude Code statusline tools — not specific to this plugin.
+> See [Known Issues](docs/known-issues.md) · [Upstream #30930](https://github.com/anthropics/claude-code/issues/30930)
+
 ![Stable](https://img.shields.io/badge/stable-v4.0.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
