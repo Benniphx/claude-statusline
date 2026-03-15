@@ -1,54 +1,52 @@
 # Known Issues
 
-## `api/oauth/usage` returns persistent 429 (since ~Feb 2026)
+## `api/oauth/usage` rate limiting (mitigated since v4.3.0)
 
-**Status:** Open — no fix from Anthropic yet
+**Status:** Mitigated — solved by using `User-Agent: claude-code/<version>` header + exponential backoff
 **Tracking:** [anthropics/claude-code#30930](https://github.com/anthropics/claude-code/issues/30930), [#31021](https://github.com/anthropics/claude-code/issues/31021)
 
-### Symptom
+### Background
 
-The 5h and 7d utilization percentages in the statusline freeze and stop updating.
-The `/tmp/claude_rate_limit_cache.json` cache file becomes stale (hours or days old).
+The `/api/oauth/usage` endpoint uses different rate limit buckets depending on the `User-Agent` header. Without the correct UA, the endpoint returns HTTP 429 after just 1-2 requests, with bans lasting 7-15+ minutes.
 
-### Root Cause
+### What we found (March 2026)
 
-`GET https://api.anthropic.com/api/oauth/usage` has a secondary rate limit of approximately
-5 requests per window. Claude Code itself also calls this endpoint (for the built-in `/usage`
-command), which exhausts the limit immediately. Any external tool calling the same endpoint
-then receives HTTP 429 indefinitely.
+| User-Agent | Behavior |
+|---|---|
+| Default (curl) | 429 after 1-2 requests, 7-15min ban |
+| `claude-code/<version>` | Stable at 30s/45s/60s intervals (tested 5 requests each) |
 
-This is **not a bug in this tool** — it is a server-side rate limit on Anthropic's end.
+Polling during an active ban **extends the ban duration**. This is why exponential backoff is critical.
 
-### How to verify
+### How v4.3.x handles it
+
+1. **`User-Agent: claude-code/<version>`** header on all API requests → uses the generous rate limit bucket
+2. **60s cache TTL** → only 1 API request per minute per machine
+3. **Exponential backoff on 429** → 30s → 60s → 120s → max 5min, persisted to `/tmp/claude_statusline_backoff.json` and shared across all instances
+4. **Stale cache fallback** → if API is unavailable, last successful data is displayed
+5. **`STATUSLINE_NO_POLL=1`** → emergency kill-switch to disable all API calls
+
+### Multi-machine usage
+
+Rate limits are per OAuth token (= per account), not per machine. With the default 60s TTL, 2 machines create at most 1 request per 30 seconds — well within tested safe limits.
+
+### If you still see frozen values
 
 ```bash
-# Check cache age
+# Check backoff state
+cat /tmp/claude_statusline_backoff.json
+# If "until" is in the future, backoff is active
+
+# Clear backoff manually
+rm /tmp/claude_statusline_backoff.json
+
+# Check cache freshness
 stat -f "%Sm" /tmp/claude_rate_limit_cache.json
 
-# Test the endpoint directly
-TOKEN=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null \
-  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('claudeAiOauth',{}).get('accessToken',''))")
-curl -s "https://api.anthropic.com/api/oauth/usage" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "anthropic-beta: oauth-2025-04-20"
-# Returns: {"error":{"type":"rate_limit_error","message":"Rate limited. Please try again later."}}
+# Emergency: disable all polling
+export STATUSLINE_NO_POLL=1
 ```
 
-### Current behavior
+### Long-term fix
 
-No workaround available. The last successfully fetched values remain visible (stale).
-A TTL increase would not help — Claude Code itself exhausts the rate limit regardless of how often this tool calls the endpoint.
-
-### Fix eta
-
-Unknown. The correct long-term fix is for Anthropic to expose rate limit utilization data
-in the statusLine stdin JSON (tracked in [anthropics/claude-code#27829](https://github.com/anthropics/claude-code/issues/27829)
-and [#29604](https://github.com/anthropics/claude-code/issues/29604)).
-
-### How to check if the issue is fixed
-
-Run `make test-oauth-usage` or:
-
-```bash
-go test ./adapter/api/... -run TestOAuthUsageEndpointLive -v
-```
+The ideal solution is for Anthropic to include rate limit data in the statusLine stdin JSON, eliminating the need for separate API calls entirely. Tracked in [anthropics/claude-code#27829](https://github.com/anthropics/claude-code/issues/27829) and [#29604](https://github.com/anthropics/claude-code/issues/29604).
