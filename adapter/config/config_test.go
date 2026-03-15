@@ -47,8 +47,8 @@ WORK_DAYS_PER_WEEK=8
 	if cfg.ContextWarningThreshold != 0 { // 0 is default (disabled), invalid 0 doesn't change it
 		t.Errorf("ContextWarningThreshold = %d, want 0", cfg.ContextWarningThreshold)
 	}
-	if cfg.RateCacheTTL != 15*time.Second { // 5 is below min 10
-		t.Errorf("RateCacheTTL = %v, want 15s", cfg.RateCacheTTL)
+	if cfg.RateCacheTTL != 45*time.Second { // 5 is below min 10, keeps default 45s
+		t.Errorf("RateCacheTTL = %v, want 45s", cfg.RateCacheTTL)
 	}
 	if cfg.WorkDaysPerWeek != 5 { // 8 is above max 7
 		t.Errorf("WorkDaysPerWeek = %d, want 5", cfg.WorkDaysPerWeek)

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	refreshInterval = 15 * time.Second
+	refreshInterval = 30 * time.Second
 	maxIdleChecks   = 4
 	lockFile        = "/tmp/claude_statusline_daemon.lock"
 	pidFile         = "/tmp/claude_statusline_daemon.pid"
@@ -64,11 +64,11 @@ func Run(cfg types.Config, creds types.Credentials, plat ports.ProcessDetector, 
 
 		idleCount = 0
 
-		// Fetch rate limits
+		// Fetch rate limits (respects exponential backoff on 429)
 		if creds.HasOAuth() {
 			resp, err := api.FetchRateLimits(creds.OAuthToken)
 			if err != nil {
-				logMsg("Error fetching rate limits: %v", err)
+				logMsg("Skipped or failed rate limit fetch: %v", err)
 			} else {
 				// Cache response
 				if raw, err := json.Marshal(resp); err == nil {

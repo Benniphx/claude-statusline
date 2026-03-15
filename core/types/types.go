@@ -52,7 +52,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		ContextWarningThreshold: 0,
-		RateCacheTTL:            15 * time.Second,
+		RateCacheTTL:            45 * time.Second,
 		WorkDaysPerWeek:         5,
 		CacheDir:                "/tmp",
 		Version:                 "dev",
