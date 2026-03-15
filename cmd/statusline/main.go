@@ -44,10 +44,10 @@ func main() {
 	// Wire adapters
 	plat := platform.Detect()
 	store := cache.New()
-	api := adaptapi.New()
-	rend := adaptrender.New()
 	cfg := adaptconfig.Load()
 	cfg.Version = version
+	api := adaptapi.NewWithCacheDir(cfg.CacheDir)
+	rend := adaptrender.New()
 
 	// Separator: 2 spaces + dim │ + 2 spaces (matching bash)
 	sep := "  " + rend.Dim("│") + "  "
@@ -161,8 +161,8 @@ func isEmptyInput(input types.Input) bool {
 func runDaemon() {
 	plat := platform.Detect()
 	store := cache.New()
-	api := adaptapi.New()
 	cfg := adaptconfig.Load()
+	api := adaptapi.NewWithCacheDir(cfg.CacheDir)
 
 	creds, err := plat.GetCredentials()
 	if err != nil {

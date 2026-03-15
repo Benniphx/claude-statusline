@@ -79,7 +79,7 @@ func parseFile(path string, cfg *types.Config) bool {
 				cfg.ContextWarningThreshold = n
 			}
 		case "RATE_CACHE_TTL":
-			if n, err := strconv.Atoi(value); err == nil && n >= 10 && n <= 120 {
+			if n, err := strconv.Atoi(value); err == nil && n >= 10 && n <= 300 {
 				cfg.RateCacheTTL = time.Duration(n) * time.Second
 			}
 		case "WORK_DAYS_PER_WEEK":
