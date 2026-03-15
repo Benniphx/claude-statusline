@@ -28,18 +28,20 @@ type backoffState struct {
 type Client struct {
 	httpClient *http.Client
 	cacheDir   string
+	version    string
 }
 
 // New creates a new API client.
 func New() *Client {
-	return NewWithCacheDir("/tmp")
+	return NewWithCacheDir("/tmp", "")
 }
 
-// NewWithCacheDir creates a new API client with a specific cache directory.
-func NewWithCacheDir(cacheDir string) *Client {
+// NewWithCacheDir creates a new API client with a specific cache directory and version.
+func NewWithCacheDir(cacheDir, version string) *Client {
 	return &Client{
 		httpClient: &http.Client{},
 		cacheDir:   cacheDir,
+		version:    version,
 	}
 }
 
@@ -61,6 +63,16 @@ func (c *Client) FetchRateLimits(token string) (*types.RateLimitResponse, error)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	req.Header.Set("Content-Type", "application/json")
+
+	// Use claude-code User-Agent for more generous rate limit bucket
+	ccVersion := c.version
+	if ccVersion == "" {
+		ccVersion = os.Getenv("CLAUDE_CODE_VERSION")
+	}
+	if ccVersion == "" {
+		ccVersion = "1.0.0"
+	}
+	req.Header.Set("User-Agent", "claude-code/"+ccVersion)
 
 	resp, err := client.Do(req)
 	if err != nil {

@@ -88,7 +88,7 @@ func TestFetchLatestRelease(t *testing.T) {
 
 func TestBackoff_EscalatesOnCall(t *testing.T) {
 	tmpDir := t.TempDir()
-	client := NewWithCacheDir(tmpDir)
+	client := NewWithCacheDir(tmpDir, "test")
 
 	// Initially no backoff
 	if rem := client.backoffRemaining(); rem > 0 {
@@ -119,7 +119,7 @@ func TestBackoff_EscalatesOnCall(t *testing.T) {
 
 func TestBackoff_CapsAtMax(t *testing.T) {
 	tmpDir := t.TempDir()
-	client := NewWithCacheDir(tmpDir)
+	client := NewWithCacheDir(tmpDir, "test")
 
 	// Escalate many times
 	for i := 0; i < 20; i++ {
@@ -134,7 +134,7 @@ func TestBackoff_CapsAtMax(t *testing.T) {
 
 func TestBackoff_ClearsOnSuccess(t *testing.T) {
 	tmpDir := t.TempDir()
-	client := NewWithCacheDir(tmpDir)
+	client := NewWithCacheDir(tmpDir, "test")
 
 	client.escalateBackoff()
 	if client.backoffRemaining() == 0 {
@@ -151,11 +151,11 @@ func TestBackoff_PersistsAcrossInstances(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Instance 1 sets backoff
-	client1 := NewWithCacheDir(tmpDir)
+	client1 := NewWithCacheDir(tmpDir, "test")
 	client1.escalateBackoff()
 
 	// Instance 2 reads it
-	client2 := NewWithCacheDir(tmpDir)
+	client2 := NewWithCacheDir(tmpDir, "test")
 	rem := client2.backoffRemaining()
 	if rem < 25*time.Second {
 		t.Errorf("backoff not persisted, got %v", rem)
@@ -164,7 +164,7 @@ func TestBackoff_PersistsAcrossInstances(t *testing.T) {
 
 func TestBackoff_ExpiredReturnsZero(t *testing.T) {
 	tmpDir := t.TempDir()
-	client := NewWithCacheDir(tmpDir)
+	client := NewWithCacheDir(tmpDir, "test")
 
 	// Write a state that's already expired
 	state := backoffState{
@@ -191,7 +191,7 @@ func TestFetchRateLimits_429TriggersBackoff(t *testing.T) {
 	defer server.Close()
 
 	// We can't easily override the URL in the client, so test the backoff state directly
-	client := NewWithCacheDir(tmpDir)
+	client := NewWithCacheDir(tmpDir, "test")
 
 	// Simulate what FetchRateLimits does on 429
 	client.escalateBackoff()

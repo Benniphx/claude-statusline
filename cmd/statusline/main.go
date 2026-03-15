@@ -46,7 +46,7 @@ func main() {
 	store := cache.New()
 	cfg := adaptconfig.Load()
 	cfg.Version = version
-	api := adaptapi.NewWithCacheDir(cfg.CacheDir)
+	api := adaptapi.NewWithCacheDir(cfg.CacheDir, version)
 	rend := adaptrender.New()
 
 	// Separator: 2 spaces + dim │ + 2 spaces (matching bash)
@@ -162,7 +162,7 @@ func runDaemon() {
 	plat := platform.Detect()
 	store := cache.New()
 	cfg := adaptconfig.Load()
-	api := adaptapi.NewWithCacheDir(cfg.CacheDir)
+	api := adaptapi.NewWithCacheDir(cfg.CacheDir, version)
 
 	creds, err := plat.GetCredentials()
 	if err != nil {
