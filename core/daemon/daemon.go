@@ -65,7 +65,8 @@ func Run(cfg types.Config, creds types.Credentials, plat ports.ProcessDetector, 
 		idleCount = 0
 
 		// Fetch rate limits (respects exponential backoff on 429)
-		if creds.HasOAuth() {
+		// STATUSLINE_NO_POLL=1 disables all API calls
+		if creds.HasOAuth() && os.Getenv("STATUSLINE_NO_POLL") != "1" {
 			resp, err := api.FetchRateLimits(creds.OAuthToken)
 			if err != nil {
 				logMsg("Skipped or failed rate limit fetch: %v", err)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"time"
 
 	"github.com/Benniphx/claude-statusline/adapter/render"
@@ -24,12 +25,28 @@ type RateSections struct {
 func Load(creds types.Credentials, cfg types.Config, store ports.CacheStore, api ports.APIClient) (types.RateLimitData, error) {
 	cachePath := fmt.Sprintf("%s/%s", cfg.CacheDir, cacheName)
 
+	// STATUSLINE_NO_POLL=1 → only serve cache, never call API
+	noPoll := os.Getenv("STATUSLINE_NO_POLL") == "1"
+
 	// Try cache first
 	if data, fresh := store.ReadIfFresh(cachePath, cfg.RateCacheTTL); fresh {
 		var resp types.RateLimitResponse
 		if err := json.Unmarshal(data, &resp); err == nil {
 			return parseResponse(&resp)
 		}
+	}
+
+	// If polling disabled, try stale cache then give up
+	if noPoll {
+		if data, err := store.ReadFile(cachePath); err == nil {
+			var stale types.RateLimitResponse
+			if err2 := json.Unmarshal(data, &stale); err2 == nil {
+				result, _ := parseResponse(&stale)
+				result.FromCache = true
+				return result, nil
+			}
+		}
+		return types.RateLimitData{}, fmt.Errorf("polling disabled (STATUSLINE_NO_POLL=1)")
 	}
 
 	// Fetch from API
