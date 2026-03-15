@@ -157,9 +157,5 @@ func ResolveCostNorm(cfg Config, modelInfo ModelInfo) CostNorm {
 	if w <= 0 {
 		w = 1.0
 	}
-	var prefix string
-	if w != 1.0 {
-		prefix = "\u2248" // ≈
-	}
-	return CostNorm{Mult: w, Prefix: prefix}
+	return CostNorm{Mult: w}
 }
