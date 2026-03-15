@@ -1,12 +1,6 @@
 # Claude Code Statusline
 
-> [!WARNING]
-> **5h/7d values currently frozen (Anthropic-side bug)**
-> The `api/oauth/usage` endpoint returns HTTP 429 persistently since ~Feb 2026.
-> This affects all Claude Code statusline tools — not specific to this plugin.
-> See [Known Issues](docs/known-issues.md) · [Upstream #30930](https://github.com/anthropics/claude-code/issues/30930)
-
-![Stable](https://img.shields.io/badge/stable-v4.0.0-blue)
+![Stable](https://img.shields.io/badge/stable-v4.3.1-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -22,7 +16,7 @@ Rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-cod
 - **Agent Count** - Shows number of active Claude processes when running with subagents
 - **Ollama Savings Tracker** - Tracks local model usage and shows estimated Haiku-equivalent cost savings
 - **Stale Context Detection** - Ignores stale API percentages after clear/compact
-- **Cross-Tab Sync** - All sessions share rate limit data (10s refresh)
+- **Cross-Tab Sync** - All sessions share rate limit data (60s refresh)
 - **API-Key Mode** - Session + daily cost tracking with burn rate
 
 ---
@@ -128,9 +122,10 @@ CONTEXT_WARNING_THRESHOLD=75
 # Rate Limit Cache TTL
 # ─────────────────────────────────────────────────────────
 # How often to refresh rate limit data from API (seconds)
-# Lower = faster cross-tab sync, slightly more API calls
-# Range: 10-120, Default: 15
-RATE_CACHE_TTL=15
+# Lower = faster updates, but risks 429 rate limiting
+# 60s is safe even with 2 machines on the same account
+# Range: 10-300, Default: 60
+RATE_CACHE_TTL=60
 
 # ─────────────────────────────────────────────────────────
 # Work Days Per Week
@@ -160,7 +155,7 @@ The optional background daemon keeps your rate limit cache fresh across all Clau
 
 ### What the Daemon Does
 
-1. **Refreshes rate limit data** every 15 seconds from the Anthropic API
+1. **Refreshes rate limit data** every 30 seconds from the Anthropic API
 2. **Writes to a shared cache file** (`/tmp/claude_rate_limit_cache.json`)
 3. **Calculates global burn rate** by tracking 5h% changes over time
 4. **Auto-stops** after ~60 seconds of no Claude processes running
@@ -176,8 +171,8 @@ The optional background daemon keeps your rate limit cache fresh across all Clau
 
 | Scenario | Without Daemon | With Daemon |
 |----------|----------------|-------------|
-| Multiple tabs | Each tab refreshes independently | Shared cache, less API calls |
-| Rate limit accuracy | May be stale (up to 15s) | Always fresh |
+| Multiple tabs | Each tab refreshes independently | Shared cache, fewer API calls |
+| Rate limit accuracy | May be stale (up to 60s) | Always fresh (30s refresh) |
 | Burn rate display | Only shows when actively typing | Shows even during pauses |
 
 ### Technical Details
@@ -186,8 +181,8 @@ The optional background daemon keeps your rate limit cache fresh across all Clau
 Location:     /tmp/claude_statusline_daemon.pid
 Log file:     /tmp/claude_statusline_daemon.log
 Cache file:   /tmp/claude_rate_limit_cache.json
-Refresh:      Every 15 seconds
-Idle timeout: 60 seconds (4 checks × 15s)
+Refresh:      Every 30 seconds
+Idle timeout: 120 seconds (4 checks × 30s)
 ```
 
 ### Future Plans
@@ -280,13 +275,20 @@ Add to `~/.claude/settings.json`:
 
 ---
 
-## Known Issues
+## Rate Limiting & Multi-Machine Usage
 
-### 5h/7d values frozen (since ~Feb 2026)
+The Anthropic `/api/oauth/usage` endpoint has strict rate limits. Since v4.3.0, this plugin handles them automatically:
 
-The `api/oauth/usage` endpoint returns persistent HTTP 429. This is a server-side issue at Anthropic — not a bug here. The last fetched values remain visible until Anthropic fixes it.
+- **`User-Agent: claude-code/<version>`** header for the more generous rate limit bucket
+- **60s cache TTL** — all sessions share one cache file, only one request per minute
+- **Exponential backoff** on 429 responses (30s → 60s → 120s → max 5min), persisted to disk so all instances respect the cooldown
+- **Stale cache fallback** — if API is unavailable, last successful data is shown
 
-See [`docs/known-issues.md`](docs/known-issues.md) for details and a fixture test to detect when it's resolved. Upstream: [anthropics/claude-code#30930](https://github.com/anthropics/claude-code/issues/30930)
+**Multi-machine:** If you use the same Anthropic account on 2 machines, keep the default 60s TTL. Worst case = 1 request per 30s total, which is well within tested limits.
+
+**Emergency kill-switch:** Set `STATUSLINE_NO_POLL=1` environment variable to disable all API polling. The statusline will only show cached data or `--`.
+
+See also: [Upstream #30930](https://github.com/anthropics/claude-code/issues/30930)
 
 ---
 
@@ -336,13 +338,19 @@ adapter/                 Implementations
 cmd/statusline/          Entry point
 ```
 
-## What's New in v4.0.0
+## What's New
 
+### v4.3.x — Anti-429 Rate Limit Protection
+- **User-Agent header** — Uses `claude-code/<version>` UA for Anthropic's more generous rate limit bucket
+- **Exponential backoff** — On 429: 30s → 60s → 120s → max 5min cooldown, persisted across all instances
+- **60s cache TTL** — Safe for multi-machine usage (2 machines = 1 req/30s worst case)
+- **`STATUSLINE_NO_POLL=1`** — Emergency kill-switch to disable all API polling
+
+### v4.0.0 — Go Rewrite
 - **Go rewrite** — Full statusline rewritten in Go for speed and maintainability
 - **Agent count display** — Shows active Claude process count when running subagents: `Opus 4.6 (3)`
 - **Ollama savings tracker** — Tracks local model usage and calculates Haiku-equivalent cost savings: `🦙 saved ~$1.71 (387 req · 3.3M tok)`
 - **Stale context fix** — Detects and ignores stale API percentages after context clear/compact
-- **Hooks on more events** — Now triggers on `startup|resume|clear|compact` (was only startup)
 - All v3.x features preserved: pace indicators, work-day aware 7d, Ollama model display, daemon, cross-tab sync
 
 **Feedback:** [Open an issue](https://github.com/Benniphx/claude-statusline/issues).
