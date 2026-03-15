@@ -2,6 +2,7 @@ package cost
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -130,8 +131,13 @@ func sumTracker(path string, store ports.CacheStore) float64 {
 }
 
 // RenderSections produces the three cost display sections for assembly by main.go.
-func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, r ports.Renderer) CostSections {
+func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, r ports.Renderer, modelInfo types.ModelInfo) CostSections {
 	display := Track(input, cfg, plat, store)
+
+	// Cost normalization
+	cn := types.ResolveCostNorm(cfg, modelInfo)
+	costMult := cn.Mult
+	costPrefix := cn.Prefix
 
 	// Local burn rate
 	var localTPM int
@@ -143,8 +149,9 @@ func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo
 			totalTokens = input.ContextWindow.TotalInputTokens + input.ContextWindow.TotalOutputTokens
 		}
 		minutes := float64(input.Cost.TotalDurationMS) / 60000.0
-		localTPM = int(float64(totalTokens) / minutes)
+		localTPM = int(math.Round(float64(totalTokens) / minutes * costMult))
 	}
+	_ = costPrefix // used below in burn display
 
 	// Session cost with color thresholds: <$0.50 green, <$2.00 yellow, ≥$2.00 red
 	sessionColor := costColor(display.SessionCost, 0.50, 2.00)
@@ -157,7 +164,7 @@ func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo
 	// Burn: "TPM t/m $X.XX/h" or "--"
 	var burnStr string
 	if localTPM > 0 {
-		tpmFmt := r.FormatTokensF(localTPM)
+		tpmFmt := costPrefix + r.FormatTokensF(localTPM)
 		burnColor := costColor(display.CostPerHour, 1.00, 5.00)
 		burnStr = fmt.Sprintf("🔥 %s %s %s%s",
 			r.Color(tpmFmt, render.Magenta),
@@ -176,8 +183,8 @@ func RenderSections(input types.Input, cfg types.Config, plat ports.PlatformInfo
 }
 
 // Render produces the full cost string (legacy compatibility).
-func Render(input types.Input, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, r ports.Renderer) string {
-	sections := RenderSections(input, cfg, plat, store, r)
+func Render(input types.Input, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, r ports.Renderer, modelInfo types.ModelInfo) string {
+	sections := RenderSections(input, cfg, plat, store, r, modelInfo)
 	sep := "  " + r.Dim("│") + "  "
 	return sections.Session + sep + sections.Daily + sep + sections.Burn
 }

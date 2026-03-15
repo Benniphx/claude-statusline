@@ -86,6 +86,20 @@ func parseFile(path string, cfg *types.Config) bool {
 			if n, err := strconv.Atoi(value); err == nil && n >= 1 && n <= 7 {
 				cfg.WorkDaysPerWeek = n
 			}
+		case "COST_NORMALIZE":
+			cfg.CostNormalize = strings.EqualFold(value, "true") || value == "1"
+		case "COST_WEIGHT_HAIKU":
+			if f, err := strconv.ParseFloat(value, 64); err == nil && f > 0 {
+				cfg.CostWeightHaiku = f
+			}
+		case "COST_WEIGHT_SONNET":
+			if f, err := strconv.ParseFloat(value, 64); err == nil && f > 0 {
+				cfg.CostWeightSonnet = f
+			}
+		case "COST_WEIGHT_OPUS":
+			if f, err := strconv.ParseFloat(value, 64); err == nil && f > 0 {
+				cfg.CostWeightOpus = f
+			}
 		}
 	}
 

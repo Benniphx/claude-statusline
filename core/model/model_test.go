@@ -2,6 +2,8 @@ package model
 
 import (
 	"testing"
+
+	"github.com/Benniphx/claude-statusline/core/types"
 )
 
 // mockOllama implements ports.OllamaClient for testing.
@@ -37,7 +39,7 @@ func TestResolveClaudeModels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.modelID, func(t *testing.T) {
-			info := Resolve(tt.modelID, tt.displayName, nil, "")
+			info := Resolve(tt.modelID, tt.displayName, nil, "", types.DefaultConfig())
 			if info.ShortName != tt.wantShort {
 				t.Errorf("ShortName = %q, want %q", info.ShortName, tt.wantShort)
 			}
@@ -70,7 +72,7 @@ func TestResolveOllamaModels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.modelID, func(t *testing.T) {
-			info := Resolve(tt.modelID, "", nil, "")
+			info := Resolve(tt.modelID, "", nil, "", types.DefaultConfig())
 			if info.ShortName != tt.wantShort {
 				t.Errorf("ShortName = %q, want %q", info.ShortName, tt.wantShort)
 			}
@@ -83,7 +85,7 @@ func TestResolveOllamaModels(t *testing.T) {
 
 func TestResolveOllamaWithContextSize(t *testing.T) {
 	mock := &mockOllama{contextSize: 131072}
-	info := Resolve("ollama:llama3-8b", "", mock, "/tmp")
+	info := Resolve("ollama:llama3-8b", "", mock, "/tmp", types.DefaultConfig())
 
 	if info.DefaultContext != 131072 {
 		t.Errorf("DefaultContext = %d, want 131072", info.DefaultContext)
@@ -91,7 +93,7 @@ func TestResolveOllamaWithContextSize(t *testing.T) {
 }
 
 func TestResolveLocalModel(t *testing.T) {
-	info := Resolve("some-local-model", "", nil, "")
+	info := Resolve("some-local-model", "", nil, "", types.DefaultConfig())
 	if info.ShortName != "🦙 Local" {
 		t.Errorf("ShortName = %q, want %q", info.ShortName, "🦙 Local")
 	}
@@ -101,12 +103,12 @@ func TestResolveLocalModel(t *testing.T) {
 }
 
 func TestResolveFallback(t *testing.T) {
-	info := Resolve("unknown-model-id", "Claude Something", nil, "")
+	info := Resolve("unknown-model-id", "Claude Something", nil, "", types.DefaultConfig())
 	if info.ShortName != "Something" {
 		t.Errorf("ShortName = %q, want %q", info.ShortName, "Something")
 	}
 
-	info2 := Resolve("unknown-model-id", "", nil, "")
+	info2 := Resolve("unknown-model-id", "", nil, "", types.DefaultConfig())
 	if info2.ShortName != "unknown-model-id" {
 		t.Errorf("ShortName = %q, want %q", info2.ShortName, "unknown-model-id")
 	}

@@ -245,7 +245,7 @@ func TestRenderSectionsSuccess(t *testing.T) {
 		Cost: types.Cost{TotalDurationMS: 300000}, // 5 min
 	}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, types.ModelInfo{})
 
 	// FiveHour section
 	if !strings.Contains(sections.FiveHour, "5h:") {
@@ -285,7 +285,7 @@ func TestRenderSectionsError(t *testing.T) {
 	plat := &mockPlatform{}
 	input := types.Input{}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, types.ModelInfo{})
 
 	if !strings.Contains(sections.FiveHour, "5h:") || !strings.Contains(sections.FiveHour, "--") {
 		t.Errorf("FiveHour on error should be '5h: --', got: %s", sections.FiveHour)
@@ -329,7 +329,7 @@ func TestRenderSectionsNoBurn(t *testing.T) {
 		Cost: types.Cost{TotalDurationMS: 45000},
 	}
 
-	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r)
+	sections := RenderSections(input, creds, cfg, plat, store, &mockAPIClient{}, r, types.ModelInfo{})
 
 	if !strings.Contains(sections.Burn, "--") {
 		t.Errorf("Burn should show '--' with short duration, got: %s", sections.Burn)
@@ -401,7 +401,7 @@ func TestPaceColorize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := paceColorize(tt.pace, r)
+		got := paceColorize(tt.pace, "", r)
 		if got != tt.want {
 			t.Errorf("paceColorize(%f) = %q, want %q", tt.pace, got, tt.want)
 		}
@@ -419,7 +419,7 @@ func TestRenderFiveHourWithPace(t *testing.T) {
 		HittingLimit: false,
 	}
 
-	result := renderFiveHour(data, pace, r)
+	result := renderFiveHour(data, pace, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "50%") {
 		t.Errorf("should contain '50%%', got: %s", result)
 	}
@@ -439,7 +439,7 @@ func TestRenderFiveHourHittingLimit(t *testing.T) {
 		HittingLimit: true,
 	}
 
-	result := renderFiveHour(data, pace, r)
+	result := renderFiveHour(data, pace, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "⚠️") {
 		t.Errorf("should contain ⚠️ when hitting limit, got: %s", result)
 	}
@@ -449,7 +449,7 @@ func TestRenderBurnWithTPM(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 15000}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "15.0K") {
 		t.Errorf("should format 15000 TPM as '15.0K', got: %s", result)
 	}
@@ -462,7 +462,7 @@ func TestRenderBurnNone(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 0}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "--") {
 		t.Errorf("should show '--' with no TPM, got: %s", result)
 	}
@@ -472,7 +472,7 @@ func TestRenderBurnHighActivity(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 5000, IsHighActivity: true}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "⚡") {
 		t.Errorf("should contain ⚡ for high activity, got: %s", result)
 	}
@@ -482,7 +482,7 @@ func TestRenderBurnHighActivityNoLocal(t *testing.T) {
 	r := &mockRenderer{}
 
 	burn := types.BurnInfo{LocalTPM: 0, IsHighActivity: true}
-	result := renderBurn(burn, r)
+	result := renderBurn(burn, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "⚡") {
 		t.Errorf("should contain ⚡ for high activity even without local TPM, got: %s", result)
 	}
@@ -501,7 +501,7 @@ func TestRenderSevenDayWithPace(t *testing.T) {
 		SevenDayPace: 0.8,
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "25%") {
 		t.Errorf("should contain '25%%', got: %s", result)
 	}
@@ -520,7 +520,7 @@ func TestRenderSevenDayOverPace(t *testing.T) {
 		SevenDayPace: 1.5,
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "⚠️") {
 		t.Errorf("should contain ⚠️ when 7d pace > 1.0, got: %s", result)
 	}
@@ -537,7 +537,7 @@ func TestRenderSevenDayWithResetDays(t *testing.T) {
 		SevenDayResetFmt: "→2d",
 	}
 
-	result := renderSevenDay(data, pace, r)
+	result := renderSevenDay(data, pace, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "→2d") {
 		t.Errorf("should contain '→2d', got: %s", result)
 	}

@@ -166,7 +166,7 @@ func TestRenderCost(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 120000},
 	}
 
-	result := Render(input, cfg, plat, store, r)
+	result := Render(input, cfg, plat, store, r, types.ModelInfo{})
 	if !strings.Contains(result, "💰") {
 		t.Error("should contain session cost emoji")
 	}
@@ -238,7 +238,7 @@ func TestRenderSectionsWithBurnRate(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.50, TotalDurationMS: 300000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.ModelInfo{})
 
 	// Session
 	if !strings.Contains(sections.Session, "💰") {
@@ -280,7 +280,7 @@ func TestRenderSectionsNoBurn(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.02, TotalDurationMS: 45000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.ModelInfo{})
 
 	if !strings.Contains(sections.Burn, "🔥") {
 		t.Error("Burn should contain 🔥 even with no burn data")
@@ -307,7 +307,7 @@ func TestRenderSectionsZeroDuration(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0, TotalDurationMS: 0},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.ModelInfo{})
 
 	if !strings.Contains(sections.Session, "$0.00") {
 		t.Errorf("Session should be $0.00, got: %s", sections.Session)
@@ -333,7 +333,7 @@ func TestRenderSectionsLegacyTokenBurn(t *testing.T) {
 		Cost: types.Cost{TotalCostUSD: 0.75, TotalDurationMS: 300000},
 	}
 
-	sections := RenderSections(input, cfg, plat, store, r)
+	sections := RenderSections(input, cfg, plat, store, r, types.ModelInfo{})
 
 	// Should compute burn from legacy tokens
 	if !strings.Contains(sections.Burn, "t/m") {
