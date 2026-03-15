@@ -139,18 +139,26 @@ func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, cn types.Cost
 
 func renderBurn(burn types.BurnInfo, cn types.CostNorm, r ports.Renderer) string {
 	normalizedTPM := int(math.Round(burn.LocalTPM * cn.Mult))
+	normalizedGlobal := int(math.Round(burn.GlobalTPM * cn.Mult))
 
 	if normalizedTPM > 0 {
 		tpmStr := cn.Prefix + r.FormatTokensF(normalizedTPM)
-		display := fmt.Sprintf("🔥 %s %s", r.Color(tpmStr, render.Magenta), r.Dim("t/m"))
-		if burn.IsHighActivity {
-			display += " " + r.Color("⚡", render.Yellow)
+		display := fmt.Sprintf("🔥 %s", r.Color(tpmStr, render.Magenta))
+
+		// Show global total when other sessions/subagents are active
+		if burn.IsHighActivity && normalizedGlobal > normalizedTPM {
+			globalStr := cn.Prefix + r.FormatTokensF(normalizedGlobal)
+			display += r.Dim("/") + r.Color(globalStr, render.Magenta)
 		}
+
+		display += " " + r.Dim("t/m")
 		return display
 	}
 
-	if burn.IsHighActivity {
-		return "🔥 " + r.Dim("--") + " " + r.Color("⚡", render.Yellow)
+	// No local activity but others are active — show only global
+	if burn.IsHighActivity && normalizedGlobal > 0 {
+		globalStr := cn.Prefix + r.FormatTokensF(normalizedGlobal)
+		return fmt.Sprintf("🔥 %s %s", r.Dim("--")+r.Dim("/")+r.Color(globalStr, render.Magenta), r.Dim("t/m"))
 	}
 
 	return "🔥 " + r.Dim("--")

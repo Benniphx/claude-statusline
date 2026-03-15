@@ -471,23 +471,25 @@ func TestRenderBurnNone(t *testing.T) {
 func TestRenderBurnHighActivity(t *testing.T) {
 	r := &mockRenderer{}
 
-	burn := types.BurnInfo{LocalTPM: 5000, IsHighActivity: true}
+	// High activity: global > local + 5000 → shows local/global format
+	burn := types.BurnInfo{LocalTPM: 5000, GlobalTPM: 15000, IsHighActivity: true}
 	result := renderBurn(burn, types.CostNorm{Mult: 1.0}, r)
-	if !strings.Contains(result, "⚡") {
-		t.Errorf("should contain ⚡ for high activity, got: %s", result)
+	if !strings.Contains(result, "/") {
+		t.Errorf("should contain '/' separator for global TPM when high activity, got: %s", result)
 	}
 }
 
 func TestRenderBurnHighActivityNoLocal(t *testing.T) {
 	r := &mockRenderer{}
 
-	burn := types.BurnInfo{LocalTPM: 0, IsHighActivity: true}
+	// No local activity but global is active → shows --/globalTPM
+	burn := types.BurnInfo{LocalTPM: 0, GlobalTPM: 15000, IsHighActivity: true}
 	result := renderBurn(burn, types.CostNorm{Mult: 1.0}, r)
-	if !strings.Contains(result, "⚡") {
-		t.Errorf("should contain ⚡ for high activity even without local TPM, got: %s", result)
-	}
 	if !strings.Contains(result, "--") {
 		t.Errorf("should show '--' without local TPM, got: %s", result)
+	}
+	if !strings.Contains(result, "/") {
+		t.Errorf("should contain '/' with global TPM, got: %s", result)
 	}
 }
 
