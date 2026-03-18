@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -30,8 +31,20 @@ type burnState struct {
 	LastTime     int64   `json:"last_time"`
 }
 
-// Run starts the daemon loop.
+// CredentialRefresher can reload credentials from the OS keychain/file.
+type CredentialRefresher interface {
+	GetCredentials() (types.Credentials, error)
+}
+
+// Run starts the daemon loop (backwards-compatible, no token refresh).
 func Run(cfg types.Config, creds types.Credentials, plat ports.ProcessDetector, store ports.CacheStore, api ports.APIClient) error {
+	return RunWithRefresh(cfg, creds, nil, plat, store, api)
+}
+
+// RunWithRefresh starts the daemon loop with credential refresh support.
+// If refresher is non-nil, the daemon reloads credentials on 401 errors
+// instead of retrying indefinitely with an expired token.
+func RunWithRefresh(cfg types.Config, creds types.Credentials, refresher CredentialRefresher, plat ports.ProcessDetector, store ports.CacheStore, api ports.APIClient) error {
 	// Acquire lock
 	lock, err := acquireLock()
 	if err != nil {
@@ -69,7 +82,17 @@ func Run(cfg types.Config, creds types.Credentials, plat ports.ProcessDetector, 
 		if creds.HasOAuth() && os.Getenv("STATUSLINE_NO_POLL") != "1" {
 			resp, err := api.FetchRateLimits(creds.OAuthToken)
 			if err != nil {
-				logMsg("Skipped or failed rate limit fetch: %v", err)
+				if isTokenExpired(err) && refresher != nil {
+					logMsg("Token expired, refreshing credentials")
+					if newCreds, refreshErr := refresher.GetCredentials(); refreshErr == nil {
+						creds = newCreds
+						logMsg("Credentials refreshed successfully")
+					} else {
+						logMsg("Credential refresh failed: %v", refreshErr)
+					}
+				} else {
+					logMsg("Skipped or failed rate limit fetch: %v", err)
+				}
 			} else {
 				// Cache response
 				if raw, err := json.Marshal(resp); err == nil {
@@ -160,6 +183,67 @@ func logMsg(format string, args ...interface{}) {
 	}
 	defer f.Close()
 	f.WriteString(entry)
+}
+
+// isTokenExpired checks if an error indicates an expired OAuth token (HTTP 401).
+func isTokenExpired(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "API returned 401")
+}
+
+// Stop terminates a running daemon by sending SIGTERM to the PID in the pid file.
+func Stop() {
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return
+	}
+	_ = process.Signal(syscall.SIGTERM)
+	time.Sleep(500 * time.Millisecond)
+}
+
+// IsStale checks if the running daemon was started from a different binary
+// than the one currently installed.
+func IsStale(currentBinary string) bool {
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return false
+	}
+	exePath := getProcessExe(pid)
+	if exePath == "" {
+		return false
+	}
+	return exePath != currentBinary
+}
+
+// getProcessExe returns the executable path for a given PID.
+func getProcessExe(pid int) string {
+	out, err := exec.Command("lsof", "-p", strconv.Itoa(pid), "-Fn").Output()
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "n") && strings.Contains(line, "statusline") {
+			path := strings.TrimPrefix(line, "n")
+			if strings.HasSuffix(path, "statusline-darwin-arm64") ||
+				strings.HasSuffix(path, "statusline-darwin-amd64") ||
+				strings.HasSuffix(path, "statusline-linux-arm64") ||
+				strings.HasSuffix(path, "statusline-linux-amd64") {
+				return path
+			}
+		}
+	}
+	return ""
 }
 
 // IsRunning checks if a daemon is currently running.

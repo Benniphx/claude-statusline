@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.5.0] - 2026-03-18
+
+### Added
+- Auto-refresh OAuth credentials on 401 (token expired) instead of retrying with stale token
+- Auto-start daemon from setup and restart on version mismatch after plugin update
+- Stop and IsStale daemon management functions
+
+### Fixed
+- Clear backoff state on 401 so refreshed credentials aren't blocked by stale cooldowns
+
 ## [4.1.2] - 2026-03-06
 
 ### Fixed

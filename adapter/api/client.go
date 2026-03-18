@@ -86,6 +86,13 @@ func (c *Client) FetchRateLimits(token string) (*types.RateLimitResponse, error)
 		return nil, fmt.Errorf("API returned 429 (rate limited, backoff escalated): %s", string(body))
 	}
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		// Clear backoff on 401: the problem is the token, not rate limiting.
+		c.clearBackoff()
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned 401: %s", string(body))
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API returned %d: %s", resp.StatusCode, string(body))
