@@ -170,7 +170,9 @@ func runDaemon() {
 		os.Exit(1)
 	}
 
-	if err := daemon.Run(cfg, creds, plat, store, api); err != nil {
+	// Pass platform as credential refresher so the daemon can reload
+	// credentials from keychain/file when the OAuth token expires.
+	if err := daemon.RunWithRefresh(cfg, creds, plat, plat, store, api); err != nil {
 		fmt.Fprintf(os.Stderr, "daemon: %v\n", err)
 		os.Exit(1)
 	}
