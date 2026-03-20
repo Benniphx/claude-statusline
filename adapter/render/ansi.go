@@ -15,6 +15,7 @@ const (
 
 	// Background colors for split bar
 	BgBlue = "\033[44m"
+	BgRed  = "\033[41m"
 )
 
 // ANSI implements the ports.Renderer interface.
