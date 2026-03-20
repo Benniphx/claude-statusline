@@ -33,6 +33,7 @@ type Renderer interface {
 	Color(text, color string) string
 	Dim(text string) string
 	MakeBar(percent, width int) string
+	MakeSplitBar(usagePct, timePct, width int) string
 	FormatTokens(n int) string  // 0 decimals: "200K"
 	FormatTokensF(n int) string // 1 decimal:  "100.0K"
 	FormatCost(f float64) string

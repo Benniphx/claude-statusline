@@ -180,8 +180,9 @@ type mockRenderer struct{}
 func (m *mockRenderer) Colorize(text string, percent int) string { return text }
 func (m *mockRenderer) Color(text, color string) string          { return text }
 func (m *mockRenderer) Dim(text string) string                   { return text }
-func (m *mockRenderer) MakeBar(percent, width int) string        { return "[bar]" }
-func (m *mockRenderer) FormatTokens(n int) string                { return fmt.Sprintf("%d", n) }
+func (m *mockRenderer) MakeBar(percent, width int) string                  { return "[bar]" }
+func (m *mockRenderer) MakeSplitBar(usagePct, timePct, width int) string   { return "[split]" }
+func (m *mockRenderer) FormatTokens(n int) string                          { return fmt.Sprintf("%d", n) }
 func (m *mockRenderer) FormatTokensF(n int) string               { return fmt.Sprintf("%d", n) }
 func (m *mockRenderer) FormatCost(f float64) string              { return fmt.Sprintf("$%.2f", f) }
 

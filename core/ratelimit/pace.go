@@ -20,8 +20,35 @@ func CalculatePace(data types.RateLimitData, cfg types.Config, plat ports.Platfo
 	// 5-hour pace
 	pace.FiveHourPace, pace.HittingLimit, pace.LimitETA, pace.ResetInfo = calcFiveHourPace(data, now)
 
+	// 5h time percentage: how much of the 5h window has elapsed
+	remainingSecs5h := data.FiveHourReset.Sub(now).Seconds()
+	if remainingSecs5h < 0 {
+		remainingSecs5h = 0
+	}
+	elapsed5h := float64(fiveHourSecs) - remainingSecs5h
+	if elapsed5h > 0 {
+		pace.FiveHourTimePct = int(elapsed5h / float64(fiveHourSecs) * 100)
+		if pace.FiveHourTimePct > 100 {
+			pace.FiveHourTimePct = 100
+		}
+	}
+
 	// 7-day pace
 	pace.SevenDayPace, pace.SevenDayResetFmt = calcSevenDayPace(data, cfg, plat, now)
+
+	// 7d time percentage: how much of the 7d window has elapsed
+	remainingSecs7d := data.SevenDayReset.Sub(now).Seconds()
+	if remainingSecs7d < 0 {
+		remainingSecs7d = 0
+	}
+	sevenDaySecs := 7.0 * 86400.0
+	elapsed7d := sevenDaySecs - remainingSecs7d
+	if elapsed7d > 0 {
+		pace.SevenDayTimePct = int(elapsed7d / sevenDaySecs * 100)
+		if pace.SevenDayTimePct > 100 {
+			pace.SevenDayTimePct = 100
+		}
+	}
 
 	return pace
 }

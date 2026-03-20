@@ -125,7 +125,8 @@ type mockRenderer struct{}
 func (m *mockRenderer) Colorize(text string, percent int) string { return text }
 func (m *mockRenderer) Color(text, color string) string          { return text }
 func (m *mockRenderer) Dim(text string) string                   { return text }
-func (m *mockRenderer) MakeBar(percent, width int) string        { return "[bar]" }
+func (m *mockRenderer) MakeBar(percent, width int) string                  { return "[bar]" }
+func (m *mockRenderer) MakeSplitBar(usagePct, timePct, width int) string   { return "[split]" }
 func (m *mockRenderer) FormatTokens(n int) string {
 	if n >= 1000 {
 		return fmt.Sprintf("%.0fK", float64(n)/1000.0)
@@ -254,8 +255,8 @@ func TestRenderSectionsSuccess(t *testing.T) {
 	if !strings.Contains(sections.FiveHour, "50%") {
 		t.Errorf("FiveHour should contain '50%%', got: %s", sections.FiveHour)
 	}
-	if !strings.Contains(sections.FiveHour, "[bar]") {
-		t.Errorf("FiveHour should contain bar, got: %s", sections.FiveHour)
+	if !strings.Contains(sections.FiveHour, "[split]") {
+		t.Errorf("FiveHour should contain split bar, got: %s", sections.FiveHour)
 	}
 
 	// Burn section

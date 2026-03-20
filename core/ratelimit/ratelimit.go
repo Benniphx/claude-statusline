@@ -145,7 +145,7 @@ func RenderSections(input types.Input, creds types.Credentials, cfg types.Config
 
 func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, cn types.CostNorm, r ports.Renderer) string {
 	fivePct := int(math.Round(data.FiveHourPercent))
-	bar := r.MakeBar(fivePct, 8)
+	bar := r.MakeSplitBar(fivePct, pace.FiveHourTimePct, 8)
 	rateDisplay := r.Colorize(fmt.Sprintf("%d%%", fivePct), fivePct)
 
 	// Pace (cost-normalized)
@@ -200,7 +200,7 @@ func renderBurn(burn types.BurnInfo, cn types.CostNorm, r ports.Renderer) string
 
 func renderSevenDay(data types.RateLimitData, pace types.PaceInfo, cn types.CostNorm, r ports.Renderer) string {
 	sevenPct := int(math.Round(data.SevenDayPercent))
-	bar := r.MakeBar(sevenPct, 8)
+	bar := r.MakeSplitBar(sevenPct, pace.SevenDayTimePct, 8)
 	display := r.Colorize(fmt.Sprintf("%d%%", sevenPct), sevenPct)
 
 	// Pace (cost-normalized)
