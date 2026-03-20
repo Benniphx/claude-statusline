@@ -1,6 +1,6 @@
 # Claude Code Statusline
 
-![Stable](https://img.shields.io/badge/stable-v5.0.0-blue)
+![Stable](https://img.shields.io/badge/stable-v5.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -139,31 +139,10 @@ RATE_CACHE_TTL=60
 # Range: 1-7, Default: 5
 WORK_DAYS_PER_WEEK=5
 
-# ─────────────────────────────────────────────────────────
-# Background Daemon (opt-in)
-# ─────────────────────────────────────────────────────────
-# Keeps rate limit cache fresh in the background
-# Useful if you have multiple Claude sessions open
-# Starts automatically on session start, stops when idle
-# Default: false (disabled)
-ENABLE_DAEMON=true
 EOF
 ```
 
 ---
-
-## Background Daemon (Optional)
-
-Since v5.0.0, the daemon is **not needed** for most users. Rate limit data comes from Claude Code's native stdin, and global burn rate is calculated from stdin deltas on each render.
-
-The daemon remains available as an opt-in for users who prefer a persistent background process:
-
-```bash
-# Enable in config:
-ENABLE_DAEMON=true
-```
-
-When enabled, it refreshes rate limit data every 30 seconds and auto-stops after ~60s of inactivity.
 
 ---
 
@@ -300,7 +279,6 @@ core/                    Domain logic (pure, no I/O)
   ollama/                Ollama stats reader + savings calculation
   model/                 Model detection + Ollama context
   update/                Update check
-  daemon/                Background daemon
 adapter/                 Implementations
   api/                   HTTP client for Anthropic + GitHub APIs
   cache/                 File-based cache with TTL
@@ -315,8 +293,7 @@ cmd/statusline/          Entry point
 ### v5.0.0 — No Daemon Needed
 - **Native stdin rate_limits** — Uses Claude Code's built-in rate limit data (≥2.1.80), no API calls needed
 - **Limit ETA** — Shows `⚠️ ~14:30` when you'll hit the 5h limit at current pace
-- **Daemon optional** — Global burn rate calculated from stdin deltas, no background process required
-- **BREAKING**: `ENABLE_DAEMON` now defaults to `false`. Set `ENABLE_DAEMON=true` in config to re-enable.
+- **No daemon** — Global burn rate calculated from stdin deltas, no background process
 
 ### v4.x — Go Rewrite + Rate Limit Protection
 - **Go rewrite** — Full hexagonal architecture for speed and maintainability

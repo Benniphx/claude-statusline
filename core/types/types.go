@@ -144,7 +144,7 @@ type PaceInfo struct {
 // BurnInfo holds burn rate metrics.
 type BurnInfo struct {
 	LocalTPM       float64 // Local tokens per minute
-	GlobalTPM      float64 // Global tokens per minute (from daemon)
+	GlobalTPM      float64 // Global tokens per minute (from stdin deltas)
 	IsHighActivity bool    // True when global >> local
 }
 

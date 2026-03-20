@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.1.0] - 2026-03-20
+
+### Removed
+- **Daemon package** (`core/daemon/`) — completely removed, no background process
+- **`--daemon` flag** — binary no longer supports daemon mode
+- **`ENABLE_DAEMON` config** — setting has no effect
+- **`LoadBurnRate`** — replaced by `CalculateGlobalBurnFromStdin`
+- **Daemon auto-start** from setup.sh
+- **Daemon mode** from statusline.sh bash fallback (~130 lines removed)
+
 ## [5.0.0] - 2026-03-20
 
 ### Changed

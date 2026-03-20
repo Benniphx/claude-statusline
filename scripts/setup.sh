@@ -19,13 +19,6 @@ elif [ -f "$HOME/.claude-statusline.conf" ]; then
     CONFIG_FILE="$HOME/.claude-statusline.conf"
 fi
 
-ENABLE_DAEMON=false
-if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
-    # Check for ENABLE_DAEMON setting
-    if grep -q "^ENABLE_DAEMON=true" "$CONFIG_FILE" 2>/dev/null; then
-        ENABLE_DAEMON=true
-    fi
-fi
 
 # === Check if update needed ===
 NEEDS_INSTALL=false
@@ -88,10 +81,4 @@ EOF
     fi
 
     echo "statusline: Installed v$SOURCE_VERSION" >&2
-fi
-
-# === Start Daemon if enabled (runs every SessionStart) ===
-if [ "$ENABLE_DAEMON" = true ] && [ -f "$STATUSLINE_DST" ]; then
-    # Start daemon in background (it handles its own duplicate detection)
-    "$STATUSLINE_DST" --daemon 2>/dev/null &
 fi
