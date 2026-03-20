@@ -88,9 +88,31 @@ func parseResponse(resp *types.RateLimitResponse) (types.RateLimitData, error) {
 	}, nil
 }
 
+// LoadFromStdin creates RateLimitData from the stdin rate_limits field (Claude Code ≥2.1.80).
+func LoadFromStdin(rl *types.StdinRateLimits) (types.RateLimitData, error) {
+	if rl == nil {
+		return types.RateLimitData{}, fmt.Errorf("no stdin rate_limits")
+	}
+
+	fiveHourReset, _ := time.Parse(time.RFC3339, rl.FiveHour.ResetsAt)
+	sevenDayReset, _ := time.Parse(time.RFC3339, rl.SevenDay.ResetsAt)
+
+	return types.RateLimitData{
+		FiveHourPercent: rl.FiveHour.UsedPercentage,
+		FiveHourReset:   fiveHourReset,
+		SevenDayPercent: rl.SevenDay.UsedPercentage,
+		SevenDayReset:   sevenDayReset,
+	}, nil
+}
+
 // RenderSections produces the three rate limit sections for assembly by main.go.
 func RenderSections(input types.Input, creds types.Credentials, cfg types.Config, plat ports.PlatformInfo, store ports.CacheStore, api ports.APIClient, r ports.Renderer, modelInfo types.ModelInfo) RateSections {
-	data, err := Load(creds, cfg, store, api)
+	// Prefer stdin rate_limits (Claude Code ≥2.1.80) — always fresh, no API call needed
+	data, err := LoadFromStdin(input.RateLimits)
+	if err != nil {
+		// Fallback to API/cache
+		data, err = Load(creds, cfg, store, api)
+	}
 	if err != nil {
 		return RateSections{
 			FiveHour: "5h: " + r.Dim("--"),
@@ -124,9 +146,13 @@ func renderFiveHour(data types.RateLimitData, pace types.PaceInfo, cn types.Cost
 		rateDisplay += " " + paceColorize(normalizedPace, cn.Prefix, r)
 	}
 
-	// Hitting limit warning (raw capacity, not cost-normalized)
+	// Hitting limit warning with ETA (raw capacity, not cost-normalized)
 	if pace.HittingLimit {
-		rateDisplay += " " + r.Color("⚠️", render.Red)
+		if pace.LimitETA != "" {
+			rateDisplay += " " + r.Color("⚠️ ~"+pace.LimitETA, render.Red)
+		} else {
+			rateDisplay += " " + r.Color("⚠️", render.Red)
+		}
 	}
 
 	// Reset time info (already contains →, cyan coloring)

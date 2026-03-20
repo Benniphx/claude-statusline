@@ -437,11 +437,44 @@ func TestRenderFiveHourHittingLimit(t *testing.T) {
 	pace := types.PaceInfo{
 		FiveHourPace: 3.0,
 		HittingLimit: true,
+		LimitETA:     "14:30",
 	}
 
 	result := renderFiveHour(data, pace, types.CostNorm{Mult: 1.0}, r)
 	if !strings.Contains(result, "⚠️") {
 		t.Errorf("should contain ⚠️ when hitting limit, got: %s", result)
+	}
+	if !strings.Contains(result, "~14:30") {
+		t.Errorf("should contain limit ETA '~14:30', got: %s", result)
+	}
+}
+
+func TestLoadFromStdin(t *testing.T) {
+	now := time.Now()
+	resetAt := now.Add(3 * time.Hour).Format(time.RFC3339)
+	reset7d := now.Add(5 * 24 * time.Hour).Format(time.RFC3339)
+
+	rl := &types.StdinRateLimits{
+		FiveHour: types.StdinRateWindow{UsedPercentage: 42, ResetsAt: resetAt},
+		SevenDay: types.StdinRateWindow{UsedPercentage: 18, ResetsAt: reset7d},
+	}
+
+	data, err := LoadFromStdin(rl)
+	if err != nil {
+		t.Fatalf("LoadFromStdin: %v", err)
+	}
+	if data.FiveHourPercent != 42 {
+		t.Errorf("FiveHourPercent = %f, want 42", data.FiveHourPercent)
+	}
+	if data.SevenDayPercent != 18 {
+		t.Errorf("SevenDayPercent = %f, want 18", data.SevenDayPercent)
+	}
+}
+
+func TestLoadFromStdinNil(t *testing.T) {
+	_, err := LoadFromStdin(nil)
+	if err == nil {
+		t.Error("LoadFromStdin(nil) should return error")
 	}
 }
 

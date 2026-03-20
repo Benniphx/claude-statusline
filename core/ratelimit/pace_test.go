@@ -53,7 +53,7 @@ func TestCalcFiveHourPace(t *testing.T) {
 				FiveHourReset:   now.Add(tt.resetIn),
 			}
 
-			pace, hitting, _ := calcFiveHourPace(data, now)
+			pace, hitting, _, _ := calcFiveHourPace(data, now)
 
 			diff := pace - tt.wantPace
 			if diff < -0.1 || diff > 0.1 {
@@ -113,6 +113,36 @@ func TestCalcSevenDayPace(t *testing.T) {
 	}
 }
 
+func TestLimitETA(t *testing.T) {
+	now := time.Now()
+
+	// Fast pace: 60% in 1h → will hit limit, should show ETA
+	data := types.RateLimitData{
+		FiveHourPercent: 60,
+		FiveHourReset:   now.Add(4 * time.Hour),
+	}
+	_, hitting, eta, _ := calcFiveHourPace(data, now)
+	if !hitting {
+		t.Error("should be hitting limit at 60% in 1h")
+	}
+	if eta == "" {
+		t.Error("should show limit ETA when hitting limit")
+	}
+
+	// Slow pace: 10% in 2h → not hitting limit, no ETA
+	dataSlow := types.RateLimitData{
+		FiveHourPercent: 10,
+		FiveHourReset:   now.Add(3 * time.Hour),
+	}
+	_, hittingSlow, etaSlow, _ := calcFiveHourPace(dataSlow, now)
+	if hittingSlow {
+		t.Error("should not be hitting limit at 10% in 2h")
+	}
+	if etaSlow != "" {
+		t.Errorf("should not show ETA when not hitting limit, got %q", etaSlow)
+	}
+}
+
 func TestResetTimeDisplay(t *testing.T) {
 	now := time.Now()
 
@@ -121,7 +151,7 @@ func TestResetTimeDisplay(t *testing.T) {
 		FiveHourPercent: 50,
 		FiveHourReset:   now.Add(25 * time.Minute),
 	}
-	_, _, info30 := calcFiveHourPace(data30, now)
+	_, _, _, info30 := calcFiveHourPace(data30, now)
 	if info30 == "" {
 		t.Error("should show reset info for ≤30 min")
 	}
@@ -134,7 +164,7 @@ func TestResetTimeDisplay(t *testing.T) {
 		FiveHourPercent: 50,
 		FiveHourReset:   now.Add(90 * time.Minute),
 	}
-	_, _, info90 := calcFiveHourPace(data90, now)
+	_, _, _, info90 := calcFiveHourPace(data90, now)
 	if info90 != "" {
 		t.Errorf("should not show reset info for >60 min: %q", info90)
 	}
