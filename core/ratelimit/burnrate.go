@@ -94,25 +94,6 @@ func CalculateGlobalBurnFromStdin(currentPct float64, cfg types.Config, store po
 	return info
 }
 
-// LoadBurnRate reads the global burn rate from cache (works with both daemon and stdin snapshots).
-func LoadBurnRate(cfg types.Config, store ports.CacheStore) types.BurnInfo {
-	var info types.BurnInfo
-
-	cachePath := fmt.Sprintf("%s/%s", cfg.CacheDir, globalBurnFile)
-	data, err := store.ReadFile(cachePath)
-	if err != nil {
-		return info
-	}
-
-	var snap burnSnapshot
-	if err := json.Unmarshal(data, &snap); err != nil {
-		return info
-	}
-
-	info.GlobalTPM = snap.TokensPerMin
-	return info
-}
-
 // MergeLocalGlobal combines local and global burn rate info.
 func MergeLocalGlobal(local, global types.BurnInfo) types.BurnInfo {
 	merged := local

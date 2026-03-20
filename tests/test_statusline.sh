@@ -436,12 +436,12 @@ else
     pass "All fetch_rate_limits calls use _atomic variant"
 fi
 
-# Test 31: Daemon mode exists
-echo "Test: Daemon mode exists"
-if grep -q '\-\-daemon' "$STATUSLINE" && grep -q 'DAEMON_LOCK' "$STATUSLINE"; then
-    pass "Daemon mode present"
+# Test 31: Daemon mode removed (v5.1.0)
+echo "Test: No daemon mode in bash script"
+if grep -q 'DAEMON_LOCK' "$STATUSLINE"; then
+    fail "Daemon code should be removed" "no DAEMON_LOCK" "found DAEMON_LOCK"
 else
-    fail "Daemon mode missing" "--daemon and DAEMON_LOCK" "not found"
+    pass "No daemon code in bash script"
 fi
 
 # Test 32: Global burn rate display exists

@@ -126,14 +126,8 @@ func RenderSections(input types.Input, creds types.Credentials, cfg types.Config
 	pace := CalculatePace(data, cfg, plat)
 	localBurn := CalculateBurnRate(input, cfg)
 
-	// Global burn: prefer stdin-delta calculation (no daemon needed),
-	// fall back to daemon cache for ENABLE_DAEMON=true users
-	var globalBurn types.BurnInfo
-	if input.RateLimits != nil {
-		globalBurn = CalculateGlobalBurnFromStdin(data.FiveHourPercent, cfg, store)
-	} else {
-		globalBurn = LoadBurnRate(cfg, store)
-	}
+	// Global burn from stdin-delta (no daemon needed)
+	globalBurn := CalculateGlobalBurnFromStdin(data.FiveHourPercent, cfg, store)
 	burn := MergeLocalGlobal(localBurn, globalBurn)
 
 	return RateSections{

@@ -15,7 +15,6 @@ import (
 	"github.com/Benniphx/claude-statusline/core/agents"
 	corecontext "github.com/Benniphx/claude-statusline/core/context"
 	"github.com/Benniphx/claude-statusline/core/cost"
-	"github.com/Benniphx/claude-statusline/core/daemon"
 	"github.com/Benniphx/claude-statusline/core/model"
 	"github.com/Benniphx/claude-statusline/core/ollama"
 	"github.com/Benniphx/claude-statusline/core/ratelimit"
@@ -31,9 +30,6 @@ func main() {
 		switch os.Args[1] {
 		case "--version", "-v":
 			fmt.Println(version)
-			return
-		case "--daemon":
-			runDaemon()
 			return
 		case "setup":
 			runSetup()
@@ -156,24 +152,4 @@ func isEmptyInput(input types.Input) bool {
 	return input.Model.ModelID == "" && input.Model.DisplayName == "" &&
 		input.ContextWindow.ContextWindowSize == 0 &&
 		input.Cost.TotalDurationMS == 0
-}
-
-func runDaemon() {
-	plat := platform.Detect()
-	store := cache.New()
-	cfg := adaptconfig.Load()
-	api := adaptapi.NewWithCacheDir(cfg.CacheDir, version)
-
-	creds, err := plat.GetCredentials()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "daemon: no credentials: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Pass platform as credential refresher so the daemon can reload
-	// credentials from keychain/file when the OAuth token expires.
-	if err := daemon.RunWithRefresh(cfg, creds, plat, plat, store, api); err != nil {
-		fmt.Fprintf(os.Stderr, "daemon: %v\n", err)
-		os.Exit(1)
-	}
 }

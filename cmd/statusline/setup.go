@@ -5,11 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
-	"syscall"
 
 	"github.com/Benniphx/claude-statusline/adapter/cache"
-	"github.com/Benniphx/claude-statusline/core/daemon"
 	"github.com/Benniphx/claude-statusline/core/settings"
 )
 
@@ -38,16 +35,6 @@ func runSetup() {
 		os.Exit(0)
 	}
 
-	// Auto-start background daemon or restart stale daemon (after plugin update).
-	if daemon.IsRunning() {
-		if daemon.IsStale(*binary) {
-			daemon.Stop()
-			startDaemon(*binary)
-		}
-	} else {
-		startDaemon(*binary)
-	}
-
 	switch result.Action {
 	case "noop":
 		printJSON("statusMessage", "Statusline ready.")
@@ -56,16 +43,6 @@ func runSetup() {
 	case "updated":
 		printJSON("statusMessage", result.Message)
 	}
-}
-
-// startDaemon launches the statusline daemon as a detached background process.
-func startDaemon(binary string) {
-	cmd := exec.Command(binary, "--daemon")
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	_ = cmd.Start()
 }
 
 func printJSON(key, value string) {
