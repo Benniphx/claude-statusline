@@ -83,6 +83,49 @@ func TestMakeBar(t *testing.T) {
 	}
 }
 
+func TestMakeSplitBar(t *testing.T) {
+	r := New()
+
+	// Both-filled uses ▀ with bg color, so all filled positions produce ▀
+	// ▀ = both filled (with bg) OR only usage (without bg)
+	// ▄ = only time
+	// ░ = empty
+	tests := []struct {
+		name     string
+		usage    int
+		time     int
+		width    int
+		wantTop  int // ▀ count (both filled + usage-only)
+		wantBot  int // ▄ count (time only)
+		wantNone int // ░ count
+	}{
+		{"equal", 50, 50, 8, 4, 0, 4},
+		{"usage ahead", 60, 30, 10, 6, 0, 4},
+		{"time ahead", 20, 60, 10, 2, 4, 4},
+		{"both empty", 0, 0, 8, 0, 0, 8},
+		{"both full", 100, 100, 8, 8, 0, 0},
+		{"clamped", 150, -10, 8, 8, 0, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := r.MakeSplitBar(tt.usage, tt.time, tt.width)
+			top := strings.Count(got, "▀")
+			bot := strings.Count(got, "▄")
+			none := strings.Count(got, "░")
+			if top != tt.wantTop {
+				t.Errorf("▀ count: got %d, want %d", top, tt.wantTop)
+			}
+			if bot != tt.wantBot {
+				t.Errorf("▄ count: got %d, want %d", bot, tt.wantBot)
+			}
+			if none != tt.wantNone {
+				t.Errorf("░ count: got %d, want %d", none, tt.wantNone)
+			}
+		})
+	}
+}
+
 func TestFormatTokens(t *testing.T) {
 	r := New()
 

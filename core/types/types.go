@@ -134,7 +134,9 @@ type RateLimitData struct {
 // PaceInfo holds calculated pace information.
 type PaceInfo struct {
 	FiveHourPace     float64
+	FiveHourTimePct  int    // Percentage of 5h window elapsed (0-100)
 	SevenDayPace     float64
+	SevenDayTimePct  int    // Percentage of 7d window elapsed (0-100)
 	HittingLimit     bool
 	LimitETA         string // e.g., "~14:30" — when limit will be hit at current pace
 	ResetInfo        string // e.g., "→45m @14:30"

@@ -12,6 +12,9 @@ const (
 	Magenta = "\033[35m"
 	DimCode = "\033[2m"
 	Reset   = "\033[0m"
+
+	// Background colors for split bar
+	BgBlue = "\033[44m"
 )
 
 // ANSI implements the ports.Renderer interface.
