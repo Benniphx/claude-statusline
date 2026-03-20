@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Benniphx/claude-statusline/core/ports"
 	"github.com/Benniphx/claude-statusline/core/types"
@@ -11,7 +12,10 @@ import (
 const globalBurnFile = "claude_global_burn.json"
 const tokensPerPercent = 5000 // 1% of 5h ≈ 5000 tokens
 
-type globalBurnData struct {
+// burnSnapshot persists the last known 5h% and timestamp for delta calculation.
+type burnSnapshot struct {
+	FiveHourPct  float64 `json:"five_hour_percent"`
+	Timestamp    int64   `json:"timestamp"`
 	TokensPerMin float64 `json:"tokens_per_min"`
 }
 
@@ -36,7 +40,61 @@ func CalculateBurnRate(input types.Input, cfg types.Config) types.BurnInfo {
 	return info
 }
 
-// LoadBurnRate reads the global burn rate from daemon cache.
+// CalculateGlobalBurnFromStdin computes account-wide burn rate from stdin rate_limits deltas.
+// On each render, it reads the previous snapshot, calculates the TPM delta, and writes
+// the new snapshot. This replaces the daemon for global burn rate tracking.
+func CalculateGlobalBurnFromStdin(currentPct float64, cfg types.Config, store ports.CacheStore) types.BurnInfo {
+	var info types.BurnInfo
+	cachePath := fmt.Sprintf("%s/%s", cfg.CacheDir, globalBurnFile)
+	now := time.Now().Unix()
+
+	// Read previous snapshot
+	var prev burnSnapshot
+	if data, err := store.ReadFile(cachePath); err == nil {
+		json.Unmarshal(data, &prev)
+	}
+
+	// Write current snapshot (always, even on first call)
+	snap := burnSnapshot{
+		FiveHourPct: currentPct,
+		Timestamp:   now,
+	}
+
+	if prev.Timestamp > 0 {
+		deltaSecs := float64(now - prev.Timestamp)
+		if deltaSecs > 0 {
+			deltaPct := currentPct - prev.FiveHourPct
+
+			if deltaPct <= 0 {
+				// No change or decrease: decay previous TPM
+				snap.TokensPerMin = prev.TokensPerMin * 0.5
+			} else {
+				// Active: calculate new TPM from delta
+				pctPerMin := (deltaPct / deltaSecs) * 60.0
+				newTPM := pctPerMin * float64(tokensPerPercent)
+
+				// Light smoothing: 80% new, 20% old
+				if prev.TokensPerMin > 0 {
+					snap.TokensPerMin = newTPM*0.8 + prev.TokensPerMin*0.2
+				} else {
+					snap.TokensPerMin = newTPM
+				}
+			}
+		} else {
+			snap.TokensPerMin = prev.TokensPerMin
+		}
+	}
+
+	// Persist snapshot
+	if raw, err := json.Marshal(snap); err == nil {
+		store.AtomicWrite(cachePath, raw)
+	}
+
+	info.GlobalTPM = snap.TokensPerMin
+	return info
+}
+
+// LoadBurnRate reads the global burn rate from cache (works with both daemon and stdin snapshots).
 func LoadBurnRate(cfg types.Config, store ports.CacheStore) types.BurnInfo {
 	var info types.BurnInfo
 
@@ -46,13 +104,12 @@ func LoadBurnRate(cfg types.Config, store ports.CacheStore) types.BurnInfo {
 		return info
 	}
 
-	var burn globalBurnData
-	if err := json.Unmarshal(data, &burn); err != nil {
+	var snap burnSnapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
 		return info
 	}
 
-	info.GlobalTPM = burn.TokensPerMin
-
+	info.GlobalTPM = snap.TokensPerMin
 	return info
 }
 
