@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2.0] - 2026-03-20
+
+### Added
+- **Split progress bar** for 5h and 7d rate limits — two independent layers:
+  - Usage bar (green → yellow → red `█`) on top
+  - Time bar (red `▁`) underneath, always visible
+  - Where both overlap: `▇` with red peeking through the bottom gap
+- Visually shows at a glance whether usage is ahead of or behind the time axis
+
 ## [5.1.0] - 2026-03-20
 
 ### Removed
