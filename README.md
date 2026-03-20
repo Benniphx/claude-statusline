@@ -1,6 +1,6 @@
 # Claude Code Statusline
 
-![Stable](https://img.shields.io/badge/stable-v4.3.1-blue)
+![Stable](https://img.shields.io/badge/stable-v5.0.0-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 [![Tests](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml/badge.svg)](https://github.com/Benniphx/claude-statusline/actions/workflows/test.yml)
@@ -16,7 +16,10 @@ Rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-cod
 - **Agent Count** - Shows number of active Claude processes when running with subagents
 - **Ollama Savings Tracker** - Tracks local model usage and shows estimated Haiku-equivalent cost savings
 - **Stale Context Detection** - Ignores stale API percentages after clear/compact
-- **Cross-Tab Sync** - All sessions share rate limit data (60s refresh)
+- **Native Rate Limits** - Uses Claude Code's built-in `rate_limits` data (≥2.1.80), no API polling needed
+- **Limit ETA** - Shows `⚠️ ~14:30` when you'll hit the 5h limit at current pace
+- **No Background Process** - Global burn rate calculated from stdin deltas, daemon fully optional
+- **Cross-Tab Sync** - All sessions share rate limit data via cache
 - **API-Key Mode** - Session + daily cost tracking with burn rate
 
 ---
@@ -60,7 +63,7 @@ Opus 4.6 (3)  │  Ctx: ██░░░░░░ 30% (60K/200K)  │  5h: ██
 |---------|---------|
 | `5h: ████░░░░ 40% 0.8x` | Under budget (sustainable) |
 | `5h: ██████░░ 72% 1.3x` | 30% over sustainable pace |
-| `5h: ████████ 95% 2.1x` | Will hit limit before reset |
+| `5h: ████████ 95% 2.1x ⚠️ ~14:30` | Will hit limit at ~14:30 at current pace |
 | `5h: ██████░░ 85% 1.3x →45m` | Reset in 45min (shown when ≤1h) |
 | `5h: ███████░ 90% 1.5x →12m @14:30` | Reset at 14:30 (shown when ≤30m) |
 
@@ -149,45 +152,18 @@ EOF
 
 ---
 
-## Background Daemon (Details)
+## Background Daemon (Optional)
 
-The optional background daemon keeps your rate limit cache fresh across all Claude sessions. Here's exactly what it does:
+Since v5.0.0, the daemon is **not needed** for most users. Rate limit data comes from Claude Code's native stdin, and global burn rate is calculated from stdin deltas on each render.
 
-### What the Daemon Does
+The daemon remains available as an opt-in for users who prefer a persistent background process:
 
-1. **Refreshes rate limit data** every 30 seconds from the Anthropic API
-2. **Writes to a shared cache file** (`/tmp/claude_rate_limit_cache.json`)
-3. **Calculates global burn rate** by tracking 5h% changes over time
-4. **Auto-stops** after ~60 seconds of no Claude processes running
-
-### What the Daemon Does NOT Do
-
-- ❌ Does not send any data to external servers (only reads from Anthropic API)
-- ❌ Does not track your conversations or prompts
-- ❌ Does not run when Claude Code is not running
-- ❌ Does not use significant CPU or memory (~0.1% CPU when active)
-
-### Why Use It?
-
-| Scenario | Without Daemon | With Daemon |
-|----------|----------------|-------------|
-| Multiple tabs | Each tab refreshes independently | Shared cache, fewer API calls |
-| Rate limit accuracy | May be stale (up to 60s) | Always fresh (30s refresh) |
-| Burn rate display | Only shows when actively typing | Shows even during pauses |
-
-### Technical Details
-
-```
-Location:     /tmp/claude_statusline_daemon.pid
-Log file:     /tmp/claude_statusline_daemon.log
-Cache file:   /tmp/claude_rate_limit_cache.json
-Refresh:      Every 30 seconds
-Idle timeout: 120 seconds (4 checks × 30s)
+```bash
+# Enable in config:
+ENABLE_DAEMON=true
 ```
 
-### Future Plans
-
-The daemon is currently **opt-in** (`ENABLE_DAEMON=false` by default). We may change this to **opt-out** in a future version once it has been thoroughly tested by the community. Any such change will be clearly documented in the changelog.
+When enabled, it refreshes rate limit data every 30 seconds and auto-stops after ~60s of inactivity.
 
 ---
 
@@ -275,20 +251,16 @@ Add to `~/.claude/settings.json`:
 
 ---
 
-## Rate Limiting & Multi-Machine Usage
+## Rate Limiting & Data Sources
 
-The Anthropic `/api/oauth/usage` endpoint has strict rate limits. Since v4.3.0, this plugin handles them automatically:
+Since v5.0.0, rate limit data comes from **two sources** (in priority order):
 
-- **`User-Agent: claude-code/<version>`** header for the more generous rate limit bucket
-- **60s cache TTL** — all sessions share one cache file, only one request per minute
-- **Exponential backoff** on 429 responses (30s → 60s → 120s → max 5min), persisted to disk so all instances respect the cooldown
-- **Stale cache fallback** — if API is unavailable, last successful data is shown
+1. **Claude Code stdin** (≥2.1.80) — Rate limits delivered natively in the JSON input. Zero API calls needed.
+2. **Anthropic API fallback** — For older Claude Code versions, the plugin fetches `/api/oauth/usage` with exponential backoff, 60s cache TTL, and stale cache fallback.
 
-**Multi-machine:** If you use the same Anthropic account on 2 machines, keep the default 60s TTL. Worst case = 1 request per 30s total, which is well within tested limits.
+This means **no more 429 errors** on Claude Code ≥2.1.80 — the data arrives for free in stdin.
 
-**Emergency kill-switch:** Set `STATUSLINE_NO_POLL=1` environment variable to disable all API polling. The statusline will only show cached data or `--`.
-
-See also: [Upstream #30930](https://github.com/anthropics/claude-code/issues/30930)
+**Emergency kill-switch:** Set `STATUSLINE_NO_POLL=1` environment variable to disable all API polling. The statusline will only show stdin data or cached data.
 
 ---
 
@@ -315,9 +287,9 @@ Run `/statusline:config` in Claude Code to check:
 
 ---
 
-## Architecture (v4.0.0)
+## Architecture
 
-v4.0.0 is a complete rewrite from Bash to Go with hexagonal architecture:
+Go with hexagonal architecture (since v4.0.0, daemon-free since v5.0.0):
 
 ```
 core/                    Domain logic (pure, no I/O)
@@ -340,18 +312,18 @@ cmd/statusline/          Entry point
 
 ## What's New
 
-### v4.3.x — Anti-429 Rate Limit Protection
-- **User-Agent header** — Uses `claude-code/<version>` UA for Anthropic's more generous rate limit bucket
-- **Exponential backoff** — On 429: 30s → 60s → 120s → max 5min cooldown, persisted across all instances
-- **60s cache TTL** — Safe for multi-machine usage (2 machines = 1 req/30s worst case)
-- **`STATUSLINE_NO_POLL=1`** — Emergency kill-switch to disable all API polling
+### v5.0.0 — No Daemon Needed
+- **Native stdin rate_limits** — Uses Claude Code's built-in rate limit data (≥2.1.80), no API calls needed
+- **Limit ETA** — Shows `⚠️ ~14:30` when you'll hit the 5h limit at current pace
+- **Daemon optional** — Global burn rate calculated from stdin deltas, no background process required
+- **BREAKING**: `ENABLE_DAEMON` now defaults to `false`. Set `ENABLE_DAEMON=true` in config to re-enable.
 
-### v4.0.0 — Go Rewrite
-- **Go rewrite** — Full statusline rewritten in Go for speed and maintainability
-- **Agent count display** — Shows active Claude process count when running subagents: `Opus 4.6 (3)`
-- **Ollama savings tracker** — Tracks local model usage and calculates Haiku-equivalent cost savings: `🦙 saved ~$1.71 (387 req · 3.3M tok)`
-- **Stale context fix** — Detects and ignores stale API percentages after context clear/compact
-- All v3.x features preserved: pace indicators, work-day aware 7d, Ollama model display, daemon, cross-tab sync
+### v4.x — Go Rewrite + Rate Limit Protection
+- **Go rewrite** — Full hexagonal architecture for speed and maintainability
+- **Anti-429** — Exponential backoff, shared cache, `STATUSLINE_NO_POLL=1` kill-switch
+- **Agent count** — Shows active Claude processes: `Opus 4.6 (3)`
+- **Cost-normalized pace** — Opus users see true budget consumption rate
+- **Ollama savings tracker** — `🦙 saved ~$1.71 (387 req · 3.3M tok)`
 
 **Feedback:** [Open an issue](https://github.com/Benniphx/claude-statusline/issues).
 

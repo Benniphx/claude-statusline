@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.0] - 2026-03-20
+
+### Changed
+- **BREAKING**: Daemon is now opt-in (`ENABLE_DAEMON=true` in config). Default: no background process
+- Global burn rate is now calculated from stdin `rate_limits` deltas on each render — no daemon needed
+- Daemon code remains available for users who prefer it but is not started by default
+
+### Removed
+- Daemon is no longer auto-started on SessionStart (was the default in 4.x for daemon-enabled users)
+
 ## [4.6.0] - 2026-03-20
 
 ### Added
