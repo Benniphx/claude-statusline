@@ -18,7 +18,7 @@ func CalculatePace(data types.RateLimitData, cfg types.Config, plat ports.Platfo
 	pace := types.PaceInfo{}
 
 	// 5-hour pace
-	pace.FiveHourPace, pace.HittingLimit, pace.ResetInfo = calcFiveHourPace(data, now)
+	pace.FiveHourPace, pace.HittingLimit, pace.LimitETA, pace.ResetInfo = calcFiveHourPace(data, now)
 
 	// 7-day pace
 	pace.SevenDayPace, pace.SevenDayResetFmt = calcSevenDayPace(data, cfg, plat, now)
@@ -26,7 +26,7 @@ func CalculatePace(data types.RateLimitData, cfg types.Config, plat ports.Platfo
 	return pace
 }
 
-func calcFiveHourPace(data types.RateLimitData, now time.Time) (pace float64, hitting bool, resetInfo string) {
+func calcFiveHourPace(data types.RateLimitData, now time.Time) (pace float64, hitting bool, limitETA string, resetInfo string) {
 	remainingSecs := data.FiveHourReset.Sub(now).Seconds()
 	if remainingSecs < 0 {
 		remainingSecs = 0
@@ -42,24 +42,27 @@ func calcFiveHourPace(data types.RateLimitData, now time.Time) (pace float64, hi
 
 	secsSinceStart := float64(fiveHourSecs) - remainingSecs
 	if secsSinceStart <= 0 {
-		return 0, false, ""
+		return 0, false, "", ""
 	}
 
 	hoursSinceStart := secsSinceStart / 3600.0
 	if hoursSinceStart <= 0 {
-		return 0, false, ""
+		return 0, false, "", ""
 	}
 
 	percentPerHour := data.FiveHourPercent / hoursSinceStart
 	pace = percentPerHour / 20.0 // 20% per hour = 1.0x sustainable
 
-	// Hitting limit check
+	// Hitting limit check + ETA calculation
 	if percentPerHour > 0 {
 		remainingPercent := 100.0 - data.FiveHourPercent
 		runwayMin := (remainingPercent / percentPerHour) * 60.0
 		runwaySecs := runwayMin * 60.0
 		if runwaySecs < remainingSecs {
 			hitting = true
+			// Calculate when limit will be hit: now + runwayMin
+			etaTime := now.Add(time.Duration(runwayMin) * time.Minute)
+			limitETA = etaTime.Format("15:04")
 		}
 	}
 
@@ -90,7 +93,7 @@ func calcFiveHourPace(data types.RateLimitData, now time.Time) (pace float64, hi
 			render.Cyan, resetTimeStr, render.Reset)
 	}
 
-	return pace, hitting, resetInfo
+	return pace, hitting, limitETA, resetInfo
 }
 
 func calcSevenDayPace(data types.RateLimitData, cfg types.Config, plat ports.PlatformInfo, now time.Time) (pace float64, resetFmt string) {

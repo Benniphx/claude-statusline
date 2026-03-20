@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.6.0] - 2026-03-20
+
+### Added
+- Use native `rate_limits` from Claude Code stdin (≥2.1.80) as primary data source, falling back to API/cache
+- Show limit ETA when hitting 5-hour limit: `⚠️ ~14:30` displays the time you'll reach 100% at current pace
+- `StdinRateLimits` types for parsing the new stdin `rate_limits` field
+
+### Changed
+- `RenderSections` now prefers stdin rate data over API calls, reducing API overhead
+
 ## [4.5.0] - 2026-03-18
 
 ### Added

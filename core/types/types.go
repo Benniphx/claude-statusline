@@ -4,9 +4,22 @@ import "time"
 
 // Input represents the JSON structure read from stdin (provided by Claude Code).
 type Input struct {
-	ContextWindow ContextWindow `json:"context_window"`
-	Model         Model         `json:"model"`
-	Cost          Cost          `json:"cost"`
+	ContextWindow ContextWindow    `json:"context_window"`
+	Model         Model            `json:"model"`
+	Cost          Cost             `json:"cost"`
+	RateLimits    *StdinRateLimits `json:"rate_limits,omitempty"`
+}
+
+// StdinRateLimits holds the rate limit data provided by Claude Code ≥2.1.80 via stdin.
+type StdinRateLimits struct {
+	FiveHour StdinRateWindow `json:"five_hour"`
+	SevenDay StdinRateWindow `json:"seven_day"`
+}
+
+// StdinRateWindow holds a single rate limit window from stdin.
+type StdinRateWindow struct {
+	UsedPercentage float64 `json:"used_percentage"`
+	ResetsAt       string  `json:"resets_at"`
 }
 
 // ContextWindow holds context window sizing and usage data.
@@ -120,10 +133,11 @@ type RateLimitData struct {
 
 // PaceInfo holds calculated pace information.
 type PaceInfo struct {
-	FiveHourPace    float64
-	SevenDayPace    float64
-	HittingLimit    bool
-	ResetInfo       string // e.g., "→45m @14:30"
+	FiveHourPace     float64
+	SevenDayPace     float64
+	HittingLimit     bool
+	LimitETA         string // e.g., "~14:30" — when limit will be hit at current pace
+	ResetInfo        string // e.g., "→45m @14:30"
 	SevenDayResetFmt string
 }
 
