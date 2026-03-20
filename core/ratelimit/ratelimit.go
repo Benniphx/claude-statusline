@@ -94,8 +94,14 @@ func LoadFromStdin(rl *types.StdinRateLimits) (types.RateLimitData, error) {
 		return types.RateLimitData{}, fmt.Errorf("no stdin rate_limits")
 	}
 
-	fiveHourReset, _ := time.Parse(time.RFC3339, rl.FiveHour.ResetsAt)
-	sevenDayReset, _ := time.Parse(time.RFC3339, rl.SevenDay.ResetsAt)
+	fiveHourReset, err := time.Parse(time.RFC3339, rl.FiveHour.ResetsAt)
+	if err != nil {
+		return types.RateLimitData{}, fmt.Errorf("invalid five_hour.resets_at: %w", err)
+	}
+	sevenDayReset, err := time.Parse(time.RFC3339, rl.SevenDay.ResetsAt)
+	if err != nil {
+		return types.RateLimitData{}, fmt.Errorf("invalid seven_day.resets_at: %w", err)
+	}
 
 	return types.RateLimitData{
 		FiveHourPercent: rl.FiveHour.UsedPercentage,

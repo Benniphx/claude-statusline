@@ -18,7 +18,7 @@ Rich status line for [Claude Code](https://docs.anthropic.com/en/docs/claude-cod
 - **Stale Context Detection** - Ignores stale API percentages after clear/compact
 - **Native Rate Limits** - Uses Claude Code's built-in `rate_limits` data (≥2.1.80), no API polling needed
 - **Limit ETA** - Shows `⚠️ ~14:30` when you'll hit the 5h limit at current pace
-- **No Background Process** - Global burn rate calculated from stdin deltas, daemon fully optional
+- **No Background Process** - Global burn rate calculated from stdin deltas, zero overhead
 - **Cross-Tab Sync** - All sessions share rate limit data via cache
 - **API-Key Mode** - Session + daily cost tracking with burn rate
 

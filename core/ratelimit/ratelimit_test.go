@@ -478,6 +478,26 @@ func TestLoadFromStdinNil(t *testing.T) {
 	}
 }
 
+func TestLoadFromStdinMalformedTimestamp(t *testing.T) {
+	rl := &types.StdinRateLimits{
+		FiveHour: types.StdinRateWindow{UsedPercentage: 42, ResetsAt: "not-a-timestamp"},
+		SevenDay: types.StdinRateWindow{UsedPercentage: 18, ResetsAt: "2026-03-20T18:00:00Z"},
+	}
+	_, err := LoadFromStdin(rl)
+	if err == nil {
+		t.Error("LoadFromStdin should return error for malformed five_hour.resets_at")
+	}
+
+	rl2 := &types.StdinRateLimits{
+		FiveHour: types.StdinRateWindow{UsedPercentage: 42, ResetsAt: "2026-03-20T18:00:00Z"},
+		SevenDay: types.StdinRateWindow{UsedPercentage: 18, ResetsAt: ""},
+	}
+	_, err2 := LoadFromStdin(rl2)
+	if err2 == nil {
+		t.Error("LoadFromStdin should return error for empty seven_day.resets_at")
+	}
+}
+
 func TestRenderBurnWithTPM(t *testing.T) {
 	r := &mockRenderer{}
 
