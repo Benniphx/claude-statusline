@@ -15,7 +15,15 @@ import (
 
 // GetCredentials retrieves OAuth credentials on macOS.
 // Priority: env var → keychain → error.
+// When ANTHROPIC_BASE_URL points to a non-Anthropic proxy (e.g. LiteLLM gateway),
+// OAuth rate limits are not applicable — skip OAuth to show cost metrics instead.
 func (p *Platform) GetCredentials() (types.Credentials, error) {
+	// 0. Proxy mode: skip OAuth when routed through a non-Anthropic gateway
+	if base := os.Getenv("ANTHROPIC_BASE_URL"); base != "" &&
+		!strings.Contains(base, "anthropic.com") {
+		return types.Credentials{}, fmt.Errorf("proxy mode: OAuth rate limits not applicable")
+	}
+
 	// 1. Environment variable
 	if token := os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"); token != "" {
 		return types.Credentials{OAuthToken: token}, nil
